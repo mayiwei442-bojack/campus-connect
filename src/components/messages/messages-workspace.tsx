@@ -28,6 +28,7 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const requestTokenRef = useRef(0);
+  const activeIdRef = useRef(initialConversationId);
   const activeConversation = conversations.find((conversation) => conversation.id === activeId) ?? null;
 
   const hydrateMessage = useCallback(async (row: MessageRow): Promise<MessageItem> => {
@@ -42,7 +43,7 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
     if (!activeId) return;
     const channel = supabase.channel(`messages:${activeId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${activeId}` }, (payload) => {
-        void hydrateMessage(payload.new as MessageRow).then((message) => setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]));
+        void hydrateMessage(payload.new as MessageRow).then((message) => setMessages((current) => activeIdRef.current !== message.conversation_id || current.some((item) => item.id === message.id) ? current : [...current, message]));
       })
       .subscribe((status) => setConnection(status === "SUBSCRIBED" ? "live" : status === "CHANNEL_ERROR" || status === "TIMED_OUT" ? "offline" : "connecting"));
     return () => { void supabase.removeChannel(channel); };
@@ -53,6 +54,7 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
   async function selectConversation(id: string) {
     if (id === activeId) return;
     setActiveId(id);
+    activeIdRef.current = id;
     setMessages([]);
     setError("");
     setConnection("connecting");
