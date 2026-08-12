@@ -1,10 +1,17 @@
-import { Bell, Radio, School } from "lucide-react";
+import { Bell, LogOut, Radio, School } from "lucide-react";
 import Link from "next/link";
 
+import { logoutAction } from "@/app/(auth)/actions";
 import { BrandMark } from "@/components/brand-mark";
 import { PrimaryNavigation } from "@/components/primary-navigation";
+import type { Viewer } from "@/lib/auth/viewer";
 
-export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) {
+type AppShellProps = Readonly<{
+  children: React.ReactNode;
+  viewer: Viewer | null;
+}>;
+
+export function AppShell({ children, viewer }: AppShellProps) {
   return (
     <div className="paper-texture min-h-screen lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-screen flex-col overflow-hidden bg-forest px-5 py-6 text-paper lg:flex">
@@ -16,10 +23,10 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
         <div className="mt-auto rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-4">
           <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-paper/48">
             <Radio size={14} className="text-signal" aria-hidden="true" />
-            Foundation mode
+            Auth foundation
           </div>
           <p className="mt-3 text-sm leading-6 text-paper/72">
-            当前建立页面骨架与视觉语言，实时数据将在后续板块接入。
+            {viewer ? `已以「${viewer.nickname}」登录，身份由 Supabase Auth 验证。` : "认证服务正在连接，平台数据保持锁定。"}
           </p>
         </div>
       </aside>
@@ -49,13 +56,26 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
               >
                 <Bell size={18} aria-hidden="true" />
               </Link>
+              <div className="hidden text-right md:block">
+                <p className="max-w-36 truncate text-xs font-bold text-forest">{viewer?.nickname ?? "认证中"}</p>
+                <p className="mt-0.5 text-[0.62rem] uppercase tracking-[0.12em] text-forest/38">Campus member</p>
+              </div>
               <Link
                 href="/profile/me"
                 className="grid size-10 place-items-center rounded-full bg-cobalt text-sm font-bold text-white shadow-[0_8px_24px_rgba(39,91,131,0.2)]"
                 aria-label="打开我的主页"
               >
-                CC
+                {viewer?.initials ?? "CC"}
               </Link>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  className="grid size-10 place-items-center rounded-full border border-forest/10 bg-white/55 text-forest transition-colors hover:bg-white hover:text-signal"
+                  aria-label="退出登录"
+                >
+                  <LogOut size={17} aria-hidden="true" />
+                </button>
+              </form>
             </div>
           </div>
         </header>

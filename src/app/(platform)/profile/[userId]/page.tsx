@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { BadgeCheck, ShieldCheck, UserRound } from "lucide-react";
 
 import { ModulePlaceholder } from "@/components/module-placeholder";
+import { getViewer } from "@/lib/auth/viewer";
 
 export const metadata: Metadata = {
   title: "个人主页",
@@ -15,6 +16,8 @@ type ProfilePageProps = {
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const { userId } = await params;
   const isSelf = userId === "me";
+  const viewer = isSelf ? await getViewer() : null;
+  const displayName = viewer?.nickname ?? (isSelf ? "你的公开主页" : `用户 ${userId}`);
 
   return (
     <ModulePlaceholder
@@ -26,14 +29,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     >
       <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
         <div className="grid size-24 place-items-center rounded-[1.5rem] bg-cobalt font-display text-2xl font-bold text-white">
-          {isSelf ? "CC" : userId.slice(0, 2).toUpperCase()}
+          {viewer?.initials ?? (isSelf ? "CC" : userId.slice(0, 2).toUpperCase())}
         </div>
         <div className="rounded-[1.35rem] border border-forest/8 bg-paper/48 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-2xl font-semibold text-forest">{isSelf ? "你的公开主页" : `用户 ${userId}`}</h2>
+            <h2 className="font-display text-2xl font-semibold text-forest">{displayName}</h2>
             <BadgeCheck size={18} className="text-cobalt" aria-hidden="true" />
           </div>
-          <p className="mt-2 text-sm leading-7 text-forest/48">真实资料将在 Auth 与 Profile 数据表接入后显示。</p>
+          <p className="mt-2 text-sm leading-7 text-forest/48">
+            {viewer ? "昵称来自受 RLS 保护的 Profile；Skill 与 Persona 将在后续板块接入。" : "当前只能查看允许公开展示的基础资料。"}
+          </p>
         </div>
         <div className="sm:col-span-2 grid gap-3 sm:grid-cols-3">
           {["Skill", "共同经历", "Persona · 最多 3 个"].map((item) => (
