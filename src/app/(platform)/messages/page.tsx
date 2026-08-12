@@ -1,47 +1,36 @@
 import type { Metadata } from "next";
-import { MessageCircle, Search } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { MessagesWorkspace, type ConversationItem, type MessageItem } from "@/components/messages/messages-workspace";
+import { getViewer } from "@/lib/auth/viewer";
+import { createClient } from "@/lib/supabase/server";
 
-export const metadata: Metadata = {
-  title: "消息",
-  description: "好友与临时连接的沟通协作空间。",
-};
+export const metadata: Metadata = { title: "消息", description: "好友与活动连接的实时沟通空间。" };
 
-export default function MessagesPage() {
-  return (
-    <ModulePlaceholder
-      eyebrow="Module 03 · Messages"
-      title="让已经发生的连接继续发展"
-      description="桌面端采用会话列表与当前会话双栏结构。正式实现将同时支持好友私聊、Activity 临时群聊、历史消息和归档会话。"
-      nextMilestone="在聊天板块接入 Conversation、Message、Storage 与 Supabase Realtime。"
-      icon={MessageCircle}
-    >
-      <div className="grid min-h-64 gap-4 sm:grid-cols-[0.72fr_1.28fr]">
-        <div className="rounded-[1.2rem] border border-forest/8 bg-paper/46 p-4">
-          <div className="flex items-center gap-2 rounded-full bg-white/65 px-3 py-2 text-xs text-forest/38">
-            <Search size={14} aria-hidden="true" />
-            搜索会话
-          </div>
-          <div className="mt-4 space-y-3">
-            {["Activity 临时群聊", "好友会话", "Team 协作会话"].map((item, index) => (
-              <div key={item} className={`rounded-xl p-3 ${index === 0 ? "bg-forest text-paper" : "bg-white/45 text-forest/55"}`}>
-                <div className="flex items-center gap-3">
-                  <span className={`size-8 rounded-full ${index === 0 ? "bg-signal" : "bg-forest/10"}`} />
-                  <span className="text-xs font-semibold">{item}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center justify-center rounded-[1.2rem] border border-dashed border-forest/14 bg-white/28 p-6 text-center">
-          <div>
-            <MessageCircle size={30} className="mx-auto text-forest/28" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-forest/52">会话内容区</p>
-            <p className="mt-2 text-xs leading-6 text-forest/38">当前只有布局边界，不保存或模拟私人消息。</p>
-          </div>
-        </div>
-      </div>
-    </ModulePlaceholder>
-  );
+export default async function MessagesPage({ searchParams }: { searchParams: Promise<{ conversation?: string }> }) {
+  const [viewer, query, supabase] = await Promise.all([getViewer(), searchParams, createClient()]);
+  if (!viewer) redirect("/login");
+
+  const { data: conversationRows } = await supabase.from("conversations").select("id, title, kind, activity_id, is_archived, updated_at").order("updated_at", { ascending: false });
+  const conversations: ConversationItem[] = conversationRows ?? [];
+  const requestedId = query.conversation;
+  const activeId = conversations.some((conversation) => conversation.id === requestedId) ? requestedId! : conversations[0]?.id;
+  let initialMessages: MessageItem[] = [];
+
+  if (activeId) {
+    const [{ data: rows }, { data: memberRows }] = await Promise.all([
+      supabase.from("messages").select("*").eq("conversation_id", activeId).order("created_at", { ascending: true }).limit(200),
+      supabase.from("conversation_members").select("profile_id").eq("conversation_id", activeId),
+    ]);
+    const profileIds = [...new Set([...(memberRows ?? []).map((member) => member.profile_id), ...(rows ?? []).map((message) => message.sender_id)])];
+    const { data: profiles } = profileIds.length ? await supabase.from("profiles").select("id, nickname").in("id", profileIds) : { data: [] };
+    const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.nickname]));
+
+    initialMessages = await Promise.all((rows ?? []).map(async (message) => {
+      const signed = message.storage_path ? await supabase.storage.from("chat-images").createSignedUrl(message.storage_path, 3600) : null;
+      return { ...message, senderName: names.get(message.sender_id) ?? "Campus member", imageUrl: signed?.data?.signedUrl ?? null };
+    }));
+  }
+
+  return <MessagesWorkspace conversations={conversations} initialConversationId={activeId ?? null} initialMessages={initialMessages} viewerId={viewer.id} />;
 }
