@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(50);
 
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.places'::regclass), 'places has RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.activities'::regclass), 'activities has RLS enabled');
@@ -24,6 +24,11 @@ select extensions.ok(
   and not has_table_privilege('authenticated', 'public.activity_participations', 'INSERT')
   and not has_table_privilege('authenticated', 'public.messages', 'INSERT'),
   'business tables cannot be written directly by authenticated clients'
+);
+
+select extensions.ok(
+  to_regclass('public.activity_invitations_inviter_id_idx') is not null,
+  'activity invitation inviter foreign key has a covering index'
 );
 
 select extensions.ok(
