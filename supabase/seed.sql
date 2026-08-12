@@ -1,0 +1,2 @@
+-- Deterministic demo users and product data will be introduced with the seed-data module.
+-- Keeping this file present makes `supabase db reset` reproducible from the first migration.
