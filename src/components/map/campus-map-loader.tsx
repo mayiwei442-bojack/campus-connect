@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import type { MapActivity } from "@/lib/activity/types";
+
 const CampusMapExplorer = dynamic(
   () => import("./campus-map-explorer").then((module) => module.CampusMapExplorer),
   {
@@ -18,6 +20,6 @@ const CampusMapExplorer = dynamic(
   },
 );
 
-export function CampusMapLoader() {
-  return <CampusMapExplorer />;
+export function CampusMapLoader({ activities }: { activities: MapActivity[] }) {
+  return <CampusMapExplorer activities={activities} />;
 }

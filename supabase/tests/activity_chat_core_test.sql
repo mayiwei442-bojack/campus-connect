@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(52);
 
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.places'::regclass), 'places has RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.activities'::regclass), 'activities has RLS enabled');
@@ -486,6 +486,20 @@ select extensions.is(
   'activity, participation, and message changes are published to Realtime'
 );
 
+reset role;
+update public.activities
+set updated_at = '2000-01-01 00:00:00+00'
+where id = (select value from test_state where key = 'approval_activity');
+update public.activity_participations
+set requested_at = requested_at
+where activity_id = (select value from test_state where key = 'approval_activity')
+  and profile_id = '22222222-2222-4222-8222-222222222222';
+
+select extensions.ok(
+  (select updated_at > '2000-01-01 00:00:00+00' from public.activities where id = (select value from test_state where key = 'approval_activity')),
+  'participation changes touch the public parent activity for reliable Realtime refresh'
+);
+
 select extensions.is(
   (
     select count(*)::integer
@@ -509,6 +523,7 @@ select extensions.ok(
     where oid = any (array[
       'public.is_conversation_member(uuid,boolean)'::regprocedure,
       'public.can_read_conversation_message(uuid,timestamptz)'::regprocedure,
+      'public.touch_activity_on_participation_change()'::regprocedure,
       'public.create_activity(text,text,text,timestamptz,timestamptz,integer,public.activity_join_mode)'::regprocedure,
       'public.join_activity(uuid)'::regprocedure,
       'public.respond_activity_join_request(uuid,uuid,boolean)'::regprocedure,
@@ -521,6 +536,11 @@ select extensions.ok(
     ])
   ),
   'all helper and business RPCs run with a fixed definer search path'
+);
+
+select extensions.ok(
+  not has_function_privilege('authenticated', 'public.touch_activity_on_participation_change()', 'EXECUTE'),
+  'the participation touch helper is trigger-only'
 );
 
 select extensions.ok(

@@ -15,12 +15,16 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Box3, Object3D, Vector3 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import { getPerspectiveFitDistance } from "@/lib/map/scene-camera";
 import { buildSceneNodePairs, findPlaceIdInHierarchy } from "@/lib/map/scene-index";
+import type { MapActivity } from "@/lib/activity/types";
+import { createClient } from "@/lib/supabase/client";
 
 const MODEL_URL = "/models/campus.glb";
 const MODEL_DIAMETER = 12;
@@ -242,12 +246,14 @@ function CampusScene({
   places,
   onSelect,
   onReady,
+  activitiesByPlace,
 }: {
   selectedId: string | null;
   cameraRequest: CameraRequest;
   places: ScenePlace[];
   onSelect: (id: string) => void;
   onReady: (places: ScenePlace[]) => void;
+  activitiesByPlace: Map<string, MapActivity[]>;
 }) {
   const selectedPlace = places.find((place) => place.id === selectedId) ?? null;
 
@@ -262,6 +268,22 @@ function CampusScene({
       <Suspense fallback={<SceneLoadingObject />}>
         <CampusModel selectedId={selectedId} onSelect={onSelect} onReady={onReady} />
       </Suspense>
+      {places.map((place) => {
+        const count = activitiesByPlace.get(place.id)?.length ?? 0;
+        if (!count) return null;
+        return (
+          <group key={place.id} position={place.anchorPosition} onClick={(event) => { event.stopPropagation(); onSelect(place.id); }}>
+            <mesh position={[0, 0.42, 0]}>
+              <sphereGeometry args={[Math.min(0.13 + count * 0.008, 0.24), 20, 20]} />
+              <meshStandardMaterial color="#e3572d" emissive="#e3572d" emissiveIntensity={0.55} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+              <ringGeometry args={[0.18, 0.24, 32]} />
+              <meshBasicMaterial color="#e3572d" transparent opacity={0.75} />
+            </mesh>
+          </group>
+        );
+      })}
       <CameraRig request={cameraRequest} focus={selectedPlace} />
     </>
   );
@@ -287,7 +309,9 @@ function SceneFailure({ message, onRetry }: { message: string; onRetry: () => vo
   );
 }
 
-export function CampusMapExplorer() {
+export function CampusMapExplorer({ activities }: { activities: MapActivity[] }) {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
   const [places, setPlaces] = useState<ScenePlace[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -295,6 +319,12 @@ export function CampusMapExplorer() {
   const [cameraRequest, setCameraRequest] = useState<CameraRequest>({ mode: "overview", token: 0 });
 
   const selectedPlace = places.find((place) => place.id === selectedId) ?? null;
+  const activitiesByPlace = useMemo(() => {
+    const grouped = new Map<string, MapActivity[]>();
+    for (const activity of activities) grouped.set(activity.placeId, [...(grouped.get(activity.placeId) ?? []), activity]);
+    return grouped;
+  }, [activities]);
+  const selectedActivities = selectedId ? activitiesByPlace.get(selectedId) ?? [] : [];
   const filteredPlaces = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -327,6 +357,16 @@ export function CampusMapExplorer() {
     setSelectedId(null);
     setSceneKey((current) => current + 1);
   };
+
+  useEffect(() => {
+    const refresh = () => router.refresh();
+    const channel = supabase
+      .channel("campus-activity-map")
+      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity_participations" }, refresh)
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [router, supabase]);
 
   return (
     <section className="overflow-hidden rounded-[1.8rem] border border-forest/10 bg-[#ede7da] shadow-[0_26px_90px_rgba(20,35,31,0.1)]">
@@ -393,6 +433,7 @@ export function CampusMapExplorer() {
                 places={places}
                 onSelect={selectPlace}
                 onReady={handleReady}
+                activitiesByPlace={activitiesByPlace}
               />
             </Canvas>
           </MapErrorBoundary>
@@ -439,12 +480,18 @@ export function CampusMapExplorer() {
                   <p className="mt-1 truncate font-mono text-[0.63rem] text-paper/52">{selectedPlace.anchorNodeName}</p>
                 </div>
               </div>
+              <div className="mt-3 flex items-center justify-between text-xs text-paper/68">
+                <span>{selectedActivities.length} 个活动 Beacon</span>
+                <Link href={`/activities/new?place=${encodeURIComponent(selectedPlace.id)}`} className="font-bold text-skyline hover:text-white">在这里发起</Link>
+              </div>
             </div>
           ) : (
             <div className="border-b border-forest/10 px-5 py-4 text-xs leading-6 text-forest/50">
               从列表选择，或直接点击场景中的建筑模型。
             </div>
           )}
+
+          {selectedActivities.length ? <div className="border-b border-forest/10 p-3"><div className="space-y-2">{selectedActivities.slice(0, 4).map((activity) => <Link key={activity.id} href={`/activities/${activity.id}`} className="block rounded-xl border border-forest/10 bg-white/65 p-3 text-left hover:bg-white"><span className="block truncate text-xs font-bold text-forest">{activity.title}</span><span className="mt-1 block text-[0.62rem] text-forest/45">{activity.joinedCount} / {activity.capacity ?? "不限"} · {activity.joinMode === "approval" ? "需审批" : "自由加入"}</span></Link>)}{selectedActivities.length > 4 ? <p className="px-2 text-[0.62rem] text-forest/45">另有 +{selectedActivities.length - 4} 个活动，点击地点后继续浏览。</p> : null}</div></div> : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto p-2" aria-live="polite">
             {filteredPlaces.map((place) => {

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Box, Link2, Map, MousePointer2 } from "lucide-react";
 
 import { CampusMapLoader } from "@/components/map/campus-map-loader";
+import { listActivities } from "@/lib/activity/queries";
+import { getViewer } from "@/lib/auth/viewer";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "校园地图",
@@ -14,7 +17,10 @@ const sceneFacts = [
   { label: "本阶段交互", value: "搜索 · 旋转 · 点击定位", icon: MousePointer2 },
 ];
 
-export default function MapPage() {
+export default async function MapPage() {
+  const viewer = await getViewer();
+  if (!viewer) redirect("/login");
+  const activities = await listActivities(viewer.id);
   return (
     <section className="rise-in">
       <div className="flex max-w-5xl flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
@@ -33,7 +39,7 @@ export default function MapPage() {
       </div>
 
       <div className="mt-9">
-        <CampusMapLoader />
+        <CampusMapLoader activities={activities.map(({ id, title, placeId, startsAt, capacity, joinedCount, joinMode }) => ({ id, title, placeId, startsAt, capacity, joinedCount, joinMode }))} />
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
