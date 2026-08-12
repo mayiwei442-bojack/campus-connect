@@ -172,6 +172,8 @@ select extensions.ok(
   'leaving preserves participation history'
 );
 
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+
 select extensions.ok(
   exists (
     select 1
