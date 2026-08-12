@@ -35,6 +35,21 @@ pnpm exec supabase db push
 `SUPABASE_DB_PASSWORD` 临时环境变量提供数据库密码；不要把密码写入仓库、命令历史或聊天。项目的
 Session Pooler 连接信息可在 Dashboard 顶部的 Connect 对话框查看。
 
+### CLI 数据库连接不可用时
+
+如果 Dashboard 能通过 HTTPS 打开，但 CLI 的 PostgreSQL 连接持续出现 DNS 错误或
+`Connection terminated unexpectedly`，可以保留正常的代理设置，临时通过 Dashboard 的
+SQL Editor 应用迁移：
+
+```powershell
+Get-Content ".\supabase\migrations\20260812150000_create_profiles.sql" -Raw -Encoding utf8 | Set-Clipboard
+```
+
+在项目的 SQL Editor 新建查询，粘贴并运行剪贴板内容。该迁移支持安全重跑，所以网页请求中断后可以
+再次执行。SQL Editor 不会写入 Supabase CLI 的迁移历史；等 CLI 数据库连接恢复后，再运行
+`pnpm exec supabase db push --dry-run` 和 `pnpm exec supabase db push`，CLI 会安全重放该迁移并记录历史。
+不要手动修改 `supabase_migrations` 表。
+
 ## 3. 配置邮箱确认
 
 在 Authentication 的 URL Configuration 中设置：

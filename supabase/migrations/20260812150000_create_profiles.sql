@@ -1,6 +1,12 @@
-create type public.app_role as enum ('user', 'admin');
+do $$
+begin
+  create type public.app_role as enum ('user', 'admin');
+exception
+  when duplicate_object then null;
+end
+$$;
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   nickname text not null check (char_length(nickname) between 2 and 24),
   avatar_path text,
@@ -33,6 +39,8 @@ grant update (
   updated_at
 ) on table public.profiles to authenticated;
 
+drop policy if exists "Authenticated users can read visible profiles" on public.profiles;
+
 create policy "Authenticated users can read visible profiles"
 on public.profiles
 for select
@@ -42,6 +50,8 @@ using (
   or is_public = true
 );
 
+drop policy if exists "Users can update their own profile" on public.profiles;
+
 create policy "Users can update their own profile"
 on public.profiles
 for update
@@ -49,7 +59,7 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
-create function public.set_profile_updated_at()
+create or replace function public.set_profile_updated_at()
 returns trigger
 language plpgsql
 set search_path = ''
@@ -62,11 +72,13 @@ $$;
 
 revoke all on function public.set_profile_updated_at() from public, anon, authenticated;
 
+drop trigger if exists set_profiles_updated_at on public.profiles;
+
 create trigger set_profiles_updated_at
 before update on public.profiles
 for each row execute procedure public.set_profile_updated_at();
 
-create function public.handle_new_user()
+create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
@@ -90,6 +102,8 @@ end;
 $$;
 
 revoke all on function public.handle_new_user() from public, anon, authenticated;
+
+drop trigger if exists on_auth_user_created on auth.users;
 
 create trigger on_auth_user_created
 after insert on auth.users
