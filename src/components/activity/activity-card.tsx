@@ -14,7 +14,7 @@ const statusLabels = {
 
 function formatTime(value: string | null) {
   if (!value) return "时间待定";
-  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(value));
 }
 
 export function ActivityCard({ activity }: { activity: ActivitySummary }) {

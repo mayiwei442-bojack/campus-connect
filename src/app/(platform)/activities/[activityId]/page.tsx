@@ -7,7 +7,7 @@ import { getActivityDetail } from "@/lib/activity/queries";
 import { getViewer } from "@/lib/auth/viewer";
 
 function formatDate(value: string | null) {
-  return value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "待定";
+  return value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Shanghai" }).format(new Date(value)) : "待定";
 }
 
 export default async function ActivityPage({ params }: { params: Promise<{ activityId: string }> }) {

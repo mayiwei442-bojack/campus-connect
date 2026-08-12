@@ -14,7 +14,7 @@ export type ConversationItem = Pick<ConversationRow, "id" | "title" | "kind" | "
 export type MessageItem = MessageRow & { senderName: string; imageUrl: string | null };
 
 function formatMessageTime(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" }).format(new Date(value));
 }
 
 export function MessagesWorkspace({ conversations, initialConversationId, initialMessages, viewerId }: { conversations: ConversationItem[]; initialConversationId: string | null; initialMessages: MessageItem[]; viewerId: string }) {
@@ -27,6 +27,7 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const requestTokenRef = useRef(0);
   const activeConversation = conversations.find((conversation) => conversation.id === activeId) ?? null;
 
   const hydrateMessage = useCallback(async (row: MessageRow): Promise<MessageItem> => {
@@ -55,9 +56,11 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
     setMessages([]);
     setError("");
     setConnection("connecting");
+    const requestToken = ++requestTokenRef.current;
     router.replace(`/messages?conversation=${id}`, { scroll: false });
-    const { data } = await supabase.from("messages").select("*").eq("conversation_id", id).order("created_at").limit(200);
-    setMessages(await Promise.all((data ?? []).map(hydrateMessage)));
+    const { data } = await supabase.from("messages").select("*").eq("conversation_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(200);
+    const hydrated = await Promise.all([...(data ?? [])].reverse().map(hydrateMessage));
+    if (requestTokenRef.current === requestToken) setMessages(hydrated);
   }
 
   async function sendText(event: FormEvent<HTMLFormElement>) {

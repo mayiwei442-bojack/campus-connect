@@ -19,14 +19,14 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
 
   if (activeId) {
     const [{ data: rows }, { data: memberRows }] = await Promise.all([
-      supabase.from("messages").select("*").eq("conversation_id", activeId).order("created_at", { ascending: true }).limit(200),
+      supabase.from("messages").select("*").eq("conversation_id", activeId).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(200),
       supabase.from("conversation_members").select("profile_id").eq("conversation_id", activeId),
     ]);
     const profileIds = [...new Set([...(memberRows ?? []).map((member) => member.profile_id), ...(rows ?? []).map((message) => message.sender_id)])];
     const { data: profiles } = profileIds.length ? await supabase.from("profiles").select("id, nickname").in("id", profileIds) : { data: [] };
     const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.nickname]));
 
-    initialMessages = await Promise.all((rows ?? []).map(async (message) => {
+    initialMessages = await Promise.all([...(rows ?? [])].reverse().map(async (message) => {
       const signed = message.storage_path ? await supabase.storage.from("chat-images").createSignedUrl(message.storage_path, 3600) : null;
       return { ...message, senderName: names.get(message.sender_id) ?? "Campus member", imageUrl: signed?.data?.signedUrl ?? null };
     }));

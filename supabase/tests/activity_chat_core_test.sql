@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(50);
+select plan(51);
 
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.places'::regclass), 'places has RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.activities'::regclass), 'activities has RLS enabled');
@@ -484,6 +484,20 @@ select extensions.is(
   ),
   3,
   'activity, participation, and message changes are published to Realtime'
+);
+
+reset role;
+update public.activities
+set updated_at = '2000-01-01 00:00:00+00'
+where id = (select value from test_state where key = 'approval_activity');
+update public.activity_participations
+set requested_at = requested_at
+where activity_id = (select value from test_state where key = 'approval_activity')
+  and profile_id = '22222222-2222-4222-8222-222222222222';
+
+select extensions.ok(
+  (select updated_at > '2000-01-01 00:00:00+00' from public.activities where id = (select value from test_state where key = 'approval_activity')),
+  'participation changes touch the public parent activity for reliable Realtime refresh'
 );
 
 select extensions.is(
