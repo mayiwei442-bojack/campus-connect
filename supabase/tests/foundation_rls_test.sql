@@ -49,7 +49,14 @@ select extensions.is_empty(
 );
 
 select extensions.ok(
-  not exists (
+  exists (
+    select 1
+    from pg_default_acl defaults
+    where defaults.defaclrole = 'postgres'::regrole
+      and defaults.defaclnamespace = 'public'::regnamespace
+      and defaults.defaclobjtype = 'f'
+  )
+  and not exists (
     select 1
     from pg_default_acl defaults
     cross join lateral aclexplode(defaults.defaclacl) privileges
