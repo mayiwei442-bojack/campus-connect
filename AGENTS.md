@@ -16,6 +16,19 @@ Priority order:
 
 Never invent product behavior when the specification is already explicit.
 
+### Current execution authorization
+
+The user has explicitly approved the P0 implementation plan dated 2026-08-13. For that plan:
+
+- Use `codex/*` branches for isolated feature work.
+- The approved P0 core tables are Place, Activity, Participation, Activity Invitation, Conversation, Conversation Member, Message, Persona, Persona Asset, Persona Entry, Persona Question Topic, Friendship, Block, Notification, and Report.
+- Additive or reversible migrations implementing the approved schema may be applied after CI and adversarial review.
+- Vercel Preview deployments and migrations to the Supabase development project `imkipffhtzfeuayyvzsj` may proceed without another confirmation.
+- After tests and adversarial review pass, feature PRs may be squash-merged into `dev`; `dev` may be merged into `main` only at the approved release milestones.
+- Stop for destructive migrations, irreversible data operations, production promotion, a new paid service, or an architecture/product-rule deviation.
+
+For each PR, the acceptance gate is: local checks, CI, adversarial review, remote migration verification when relevant, and user-visible Preview verification. Do not merge with an unresolved P0/P1 finding.
+
 ---
 
 ## 1. Non-negotiable product rules
@@ -70,8 +83,7 @@ Use this lifecycle:
 2. Inspect the relevant existing code before editing.
 3. Restate internally the exact feature boundary and acceptance criteria.
 4. Create or switch to a branch:
-   - `feature/<short-feature-name>`
-   - `fix/<short-bug-name>`
+   - `codex/<short-feature-name>`
 5. Implement the smallest coherent change.
 6. Add/update tests where practical.
 7. Run relevant checks:
@@ -102,8 +114,7 @@ Expected branches:
 
 - `main` — stable demo/release branch
 - `dev` — integration branch
-- `feature/*` — isolated feature work
-- `fix/*` — isolated bug fixes
+- `codex/*` — isolated feature and fix work
 
 Rules:
 
