@@ -1,48 +1,53 @@
 import type { Metadata } from "next";
-import { Box, Link2, Map, RadioTower } from "lucide-react";
+import { Box, Link2, Map, MousePointer2 } from "lucide-react";
 
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { CampusMapLoader } from "@/components/map/campus-map-loader";
 
 export const metadata: Metadata = {
   title: "校园地图",
-  description: "在数字校园空间中发现 Place 与 Activity。",
+  description: "浏览 Campus Connect 的三维校园场景与空间节点。",
 };
 
-const pipeline = [
-  { label: "静态场景", value: "campus.glb", icon: Box },
-  { label: "空间映射", value: "PLACE_* / ANCHOR_*", icon: Link2 },
-  { label: "动态界面", value: "Activity → Beacon", icon: RadioTower },
+const sceneFacts = [
+  { label: "静态场景", value: "campus.glb · 235 KB", icon: Box },
+  { label: "空间配对", value: "73 Place · 73 Anchor", icon: Link2 },
+  { label: "本阶段交互", value: "搜索 · 旋转 · 点击定位", icon: MousePointer2 },
 ];
 
 export default function MapPage() {
   return (
-    <ModulePlaceholder
-      eyebrow="Module 01 · Campus Map"
-      title="把校园空间变成可加入的现场"
-      description="地图模块将加载仓库中的静态 GLB，通过 Place 与 Anchor 节点关联真实 Activity。用户主动选择场所，不使用 GPS 或后台定位。"
-      nextMilestone="在地图板块接入 React Three Fiber、场景交互与 Place 配置。"
-      icon={Map}
-    >
-      <div>
-        <div className="campus-grid relative min-h-48 overflow-hidden rounded-[1.4rem] p-5 text-paper">
-          <div className="absolute right-[22%] top-[35%] size-3 rounded-full bg-signal shadow-[0_0_22px_7px_rgba(227,87,45,0.32)]" />
-          <div className="absolute bottom-[24%] left-[34%] size-2.5 rounded-full bg-skyline shadow-[0_0_20px_6px_rgba(141,185,199,0.25)]" />
-          <p className="relative text-[0.65rem] font-bold uppercase tracking-[0.2em] text-paper/48">Scene asset ready</p>
-          <p className="relative mt-3 max-w-md font-display text-2xl font-semibold">73 组 Place / Anchor 节点等待业务映射</p>
+    <section className="rise-in">
+      <div className="flex max-w-5xl flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[0.68rem] font-bold uppercase tracking-[0.22em] text-signal">Module 01 · Campus Map</p>
+          <h1 className="mt-3 max-w-3xl font-display text-4xl font-semibold leading-[1.18] tracking-[-0.04em] text-forest sm:text-5xl">
+            从模型节点进入校园现场
+          </h1>
+          <p className="mt-5 max-w-3xl text-base leading-8 text-forest/62">
+            当前地图直接读取仓库中的 GLB 场景，按同名后缀配对 Place 与 Anchor。这里展示的是技术场景索引，尚未将节点包装成未经确认的真实地点资料。
+          </p>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {pipeline.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="rounded-[1.2rem] border border-forest/8 bg-paper/55 p-4">
-                <Icon size={18} className="text-cobalt" aria-hidden="true" />
-                <p className="mt-4 text-xs font-semibold text-forest/45">{item.label}</p>
-                <p className="mt-1.5 text-sm font-bold text-forest">{item.value}</p>
-              </div>
-            );
-          })}
+        <div className="grid size-20 shrink-0 place-items-center rounded-[1.6rem] border border-forest/10 bg-white/45 text-cobalt shadow-[0_16px_50px_rgba(39,91,131,0.1)]">
+          <Map size={34} strokeWidth={1.5} aria-hidden="true" />
         </div>
       </div>
-    </ModulePlaceholder>
+
+      <div className="mt-9">
+        <CampusMapLoader />
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {sceneFacts.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="rounded-[1.25rem] border border-forest/8 bg-white/48 p-4 shadow-[0_12px_36px_rgba(20,35,31,0.04)]">
+              <Icon size={18} className="text-cobalt" aria-hidden="true" />
+              <p className="mt-4 text-xs font-semibold text-forest/45">{item.label}</p>
+              <p className="mt-1.5 text-sm font-bold text-forest">{item.value}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
