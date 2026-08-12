@@ -19,10 +19,13 @@ import { Box3, Object3D, Vector3 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+import { getPerspectiveFitDistance } from "@/lib/map/scene-camera";
 import { buildSceneNodePairs, findPlaceIdInHierarchy } from "@/lib/map/scene-index";
 
 const MODEL_URL = "/models/campus.glb";
 const MODEL_DIAMETER = 12;
+const SCENE_OVERVIEW_RADIUS = (MODEL_DIAMETER * Math.SQRT2) / 2;
+const SCENE_CENTER: [number, number, number] = [0, 0.2, 0];
 
 type ScenePlace = {
   id: string;
@@ -67,6 +70,7 @@ function CameraRig({ request, focus }: { request: CameraRequest; focus: ScenePla
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
   const invalidate = useThree((state) => state.invalidate);
+  const size = useThree((state) => state.size);
   const controlsRef = useRef<OrbitControls | null>(null);
 
   useEffect(() => {
@@ -74,7 +78,7 @@ function CameraRig({ request, focus }: { request: CameraRequest; focus: ScenePla
     const handleChange = () => invalidate();
     nextControls.enableDamping = false;
     nextControls.minDistance = 2.5;
-    nextControls.maxDistance = 30;
+    nextControls.maxDistance = 80;
     nextControls.maxPolarAngle = Math.PI / 2.04;
     nextControls.addEventListener("change", handleChange);
     controlsRef.current = nextControls;
@@ -92,26 +96,35 @@ function CameraRig({ request, focus }: { request: CameraRequest; focus: ScenePla
       return;
     }
 
-    const target = focus?.anchorPosition ?? [0, 0.35, 0];
-    controls.target.set(...target);
-
+    const aspect = size.height > 0 ? size.width / size.height : 1;
+    const verticalFov = "fov" in camera && typeof camera.fov === "number" ? camera.fov : 42;
+    const overviewDistance = getPerspectiveFitDistance({
+      radius: SCENE_OVERVIEW_RADIUS,
+      verticalFovDegrees: verticalFov,
+      aspect,
+      padding: 1.16,
+    });
     if (request.mode === "top") {
+      controls.target.set(...SCENE_CENTER);
       camera.up.set(0, 0, -1);
-      camera.position.set(target[0], 15, target[2] + 0.001);
+      camera.position.set(SCENE_CENTER[0], SCENE_CENTER[1] + overviewDistance, SCENE_CENTER[2] + 0.001);
     } else if (request.mode === "focus" && focus) {
+      controls.target.set(...focus.anchorPosition);
       camera.up.set(0, 1, 0);
-      camera.position.set(target[0] + 2.8, target[1] + 3.2, target[2] + 2.8);
+      const focusOffset = new Vector3(1, 0.9, 1).normalize().multiplyScalar(7.5);
+      camera.position.set(...focus.anchorPosition).add(focusOffset);
     } else {
+      controls.target.set(...SCENE_CENTER);
       camera.up.set(0, 1, 0);
-      controls.target.set(0, 0.35, 0);
-      camera.position.set(8.5, 7.2, 8.5);
+      const overviewOffset = new Vector3(1, 0.78, 1).normalize().multiplyScalar(overviewDistance);
+      camera.position.set(...SCENE_CENTER).add(overviewOffset);
     }
 
     camera.lookAt(controls.target);
     camera.updateProjectionMatrix();
     controls.update();
     invalidate();
-  }, [camera, focus, invalidate, request]);
+  }, [camera, focus, invalidate, request, size.height, size.width]);
 
   return null;
 }
@@ -241,7 +254,7 @@ function CampusScene({
   return (
     <>
       <color attach="background" args={["#173f35"]} />
-      <fog attach="fog" args={["#173f35", 14, 28]} />
+      <fog attach="fog" args={["#173f35", 38, 78]} />
       <ambientLight intensity={1.65} />
       <hemisphereLight args={["#dceff1", "#6f5943", 2.1]} />
       <directionalLight position={[6, 10, 5]} intensity={2.2} />
@@ -359,14 +372,14 @@ export function CampusMapExplorer() {
         </div>
       </header>
 
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="relative min-h-[32rem] overflow-hidden bg-forest xl:min-h-[39rem]">
+      <div className="grid xl:h-[42rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="relative h-[32rem] min-h-0 overflow-hidden bg-forest xl:h-full">
           <MapErrorBoundary key={sceneKey} fallback={(message) => <SceneFailure message={message} onRetry={retryScene} />}>
             <Canvas
               aria-label="可交互三维校园场景"
               frameloop="demand"
               dpr={[1, 1.75]}
-              camera={{ position: [8.5, 7.2, 8.5], fov: 42, near: 0.1, far: 100 }}
+              camera={{ position: [18, 15, 18], fov: 42, near: 0.1, far: 100 }}
               gl={{ antialias: true, powerPreference: "high-performance" }}
               fallback={
                 <p className="p-6 text-sm leading-7 text-paper">
@@ -397,7 +410,7 @@ export function CampusMapExplorer() {
           </div>
         </div>
 
-        <aside className="flex min-h-[34rem] flex-col border-t border-forest/10 bg-paper/68 xl:min-h-[39rem] xl:border-l xl:border-t-0">
+        <aside className="flex h-[34rem] min-h-0 flex-col border-t border-forest/10 bg-paper/68 xl:h-full xl:border-l xl:border-t-0">
           <div className="border-b border-forest/10 p-5">
             <label className="relative block">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-forest/35" size={17} aria-hidden="true" />
