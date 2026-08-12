@@ -4,6 +4,7 @@ import {
   CalendarClock,
   Eye,
   EyeOff,
+  Layers3,
   MapPin,
   MessageCircle,
   ShieldCheck,
@@ -12,8 +13,11 @@ import {
 import { notFound } from "next/navigation";
 
 import { ProfileEditor } from "@/components/profile/profile-editor";
+import { SkillManager } from "@/components/skill/skill-manager";
+import { SkillShowcase } from "@/components/skill/skill-showcase";
 import { getViewer } from "@/lib/auth/viewer";
 import type { ProfileFormValues } from "@/lib/profile/action-state";
+import type { ProfileSkillItem } from "@/lib/skill/action-state";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -53,19 +57,31 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const supabase = await createClient();
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select(
-      "id,nickname,avatar_path,campus,bio,is_public,allow_stranger_messages,allow_matching,updated_at",
-    )
-    .eq("id", targetUserId)
-    .maybeSingle();
+  const [{ data: profile, error }, { data: profileSkillRows, error: skillError }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id,nickname,avatar_path,campus,bio,is_public,allow_stranger_messages,allow_matching,updated_at",
+      )
+      .eq("id", targetUserId)
+      .maybeSingle(),
+    supabase
+      .from("profile_skills")
+      .select(
+        "id,self_rating,note,is_public,allow_contact,allow_matching,skill:skills!profile_skills_skill_id_fkey(name,kind)",
+      )
+      .eq("profile_id", targetUserId)
+      .order("created_at", { ascending: true }),
+  ]);
 
   if (error) {
     throw new Error("个人资料暂时无法读取");
   }
   if (!profile) {
     notFound();
+  }
+  if (skillError) {
+    throw new Error("Skill 暂时无法读取");
   }
 
   const isOwner = viewer.id === profile.id;
@@ -77,6 +93,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     isPublic: profile.is_public,
     nickname: profile.nickname,
   };
+  const profileSkills: ProfileSkillItem[] = (profileSkillRows ?? []).map((row) => ({
+    allowContact: row.allow_contact,
+    allowMatching: row.allow_matching,
+    id: row.id,
+    isPublic: row.is_public,
+    kind: row.skill.kind,
+    name: row.skill.name,
+    note: row.note ?? "",
+    selfRating: row.self_rating,
+  }));
 
   return (
     <section className="rise-in space-y-6">
@@ -159,8 +185,29 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        {["Skill · 下一板块", "共同经历 · 待活动模块", "Persona · 最多 3 个"].map((item, index) => (
+      <section className="overflow-hidden rounded-[1.9rem] border border-forest/10 bg-paper-deep/28 p-5 sm:p-7">
+        <header className="mb-6 flex flex-col gap-4 border-b border-forest/8 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-signal">
+              <Layers3 size={14} aria-hidden="true" />
+              Skill coordinates
+            </p>
+            <h2 className="mt-2 font-display text-3xl font-semibold tracking-[-0.035em] text-forest sm:text-4xl">
+              {isOwner ? "我的能力与兴趣坐标" : `${profile.nickname} 的公开 Skill`}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-forest/48">
+              能力和兴趣属于同一个连接网络，但每一条都保留独立的公开、联系与匹配边界。
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-white/55 px-3.5 py-2 font-mono text-[0.65rem] font-bold uppercase tracking-[0.14em] text-forest/45">
+            {profileSkills.length} coordinates
+          </span>
+        </header>
+        {isOwner ? <SkillManager items={profileSkills} /> : <SkillShowcase items={profileSkills} />}
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {["共同经历 · 待活动模块", "Persona · 最多 3 个"].map((item, index) => (
           <div key={item} className="flex items-center gap-3 rounded-[1.2rem] border border-forest/8 bg-white/32 p-4 text-sm font-semibold text-forest/52">
             <span className="font-mono text-[0.62rem] tracking-[0.14em] text-signal">0{index + 1}</span>
             {item}
