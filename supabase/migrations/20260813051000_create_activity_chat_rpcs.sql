@@ -318,7 +318,7 @@ begin
     where activity_id = p_activity_id
       and profile_id = p_profile_id;
 
-    return 'rejected';
+    return 'rejected'::public.activity_participation_status;
   end if;
 
   select count(*)::integer

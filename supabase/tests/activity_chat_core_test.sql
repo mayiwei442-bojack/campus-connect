@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(42);
+select plan(49);
 
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.places'::regclass), 'places has RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.activities'::regclass), 'activities has RLS enabled');
@@ -107,6 +107,18 @@ select extensions.is(
   'free activity joins immediately while a slot exists'
 );
 
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+
+insert into test_state (key, value)
+select 'old_message', public.send_message(
+  (select value from test_state where key = 'free_conversation'),
+  'text',
+  'Visible before leaving',
+  null,
+  null,
+  'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+);
+
 set local request.jwt.claim.sub = '33333333-3333-4333-8333-333333333333';
 
 select extensions.is(
@@ -122,6 +134,8 @@ select extensions.is(
   'waitlisted'::public.activity_participation_status,
   'later free joiner is also waitlisted'
 );
+
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
 
 select extensions.ok(
   (
@@ -248,6 +262,15 @@ select extensions.is(
   'creator can reject a pending request'
 );
 
+set local request.jwt.claim.sub = '55555555-5555-4555-8555-555555555555';
+
+select extensions.is_empty(
+  $$select id from public.activity_participations where status <> 'joined'$$,
+  'an unrelated user cannot inspect pending, waitlisted, rejected, removed, or left participation state'
+);
+
+set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+
 insert into test_state (key, value)
 select 'invitation', public.create_activity_invitation(
   (select value from test_state where key = 'approval_activity'),
@@ -300,6 +323,58 @@ select extensions.ok(
   'message sender and body are server-authoritative'
 );
 
+select extensions.lives_ok(
+  $$insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+    select
+      '66666666-6666-4666-8666-666666666666',
+      'chat-images',
+      (select value::text from test_state where key = 'free_conversation') || '/33333333-3333-4333-8333-333333333333/proof.png',
+      '33333333-3333-4333-8333-333333333333'::uuid,
+      '33333333-3333-4333-8333-333333333333',
+      '{"mimetype":"image/png"}'::jsonb$$,
+  'active member can upload an image into their conversation-scoped folder'
+);
+
+insert into test_state (key, value)
+select 'image_message', public.send_message(
+  (select value from test_state where key = 'free_conversation'),
+  'image',
+  'Reference image',
+  (select value::text from test_state where key = 'free_conversation') || '/33333333-3333-4333-8333-333333333333/proof.png',
+  'image/png',
+  'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+);
+
+select extensions.ok(
+  (select value from test_state where key = 'image_message') is not null,
+  'active member can attach a verified private image to a message'
+);
+
+reset role;
+
+update public.messages
+set created_at = (
+  select left_at - interval '1 minute'
+  from public.activity_participations
+  where activity_id = (select value from test_state where key = 'free_activity')
+    and profile_id = '22222222-2222-4222-8222-222222222222'
+)
+where id = (select value from test_state where key = 'old_message');
+
+update public.messages
+set created_at = (
+  select left_at + interval '1 minute'
+  from public.activity_participations
+  where activity_id = (select value from test_state where key = 'free_activity')
+    and profile_id = '22222222-2222-4222-8222-222222222222'
+)
+where id in (
+  (select value from test_state where key = 'message'),
+  (select value from test_state where key = 'image_message')
+);
+
+set local role authenticated;
+
 set local request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
 
 select extensions.throws_ok(
@@ -314,6 +389,33 @@ select extensions.throws_ok(
   '42501',
   'ACTIVE_CONVERSATION_MEMBERSHIP_REQUIRED',
   'a member who left cannot send new messages'
+);
+
+select extensions.results_eq(
+  $$select body from public.messages where conversation_id = (select value from test_state where key = 'free_conversation') order by created_at, id$$,
+  $$values ('Visible before leaving'::text)$$,
+  'a former member can still read messages created before leaving'
+);
+
+select extensions.is_empty(
+  $$select id from public.messages where id in (
+    (select value from test_state where key = 'message'),
+    (select value from test_state where key = 'image_message')
+  )$$,
+  'a former member cannot monitor text or image messages created after leaving'
+);
+
+select extensions.results_eq(
+  $$select profile_id from public.conversation_members where conversation_id = (select value from test_state where key = 'free_conversation') order by profile_id$$,
+  $$values ('22222222-2222-4222-8222-222222222222'::uuid)$$,
+  'a former member cannot monitor the current conversation roster'
+);
+
+select extensions.is_empty(
+  $$select name from storage.objects
+    where bucket_id = 'chat-images'
+      and name = (select value::text from test_state where key = 'free_conversation') || '/33333333-3333-4333-8333-333333333333/proof.png'$$,
+  'a former member cannot read an image sent after leaving'
 );
 
 set local request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
@@ -395,9 +497,11 @@ select extensions.is(
 
 select extensions.ok(
   (
-    select bool_and(prosecdef)
+    select bool_and(prosecdef and 'search_path=""' = any (coalesce(proconfig, array[]::text[])))
     from pg_proc
     where oid = any (array[
+      'public.is_conversation_member(uuid,boolean)'::regprocedure,
+      'public.can_read_conversation_message(uuid,timestamptz)'::regprocedure,
       'public.create_activity(text,text,text,timestamptz,timestamptz,integer,public.activity_join_mode)'::regprocedure,
       'public.join_activity(uuid)'::regprocedure,
       'public.respond_activity_join_request(uuid,uuid,boolean)'::regprocedure,
@@ -409,7 +513,7 @@ select extensions.ok(
       'public.send_message(uuid,public.message_kind,text,text,text,uuid)'::regprocedure
     ])
   ),
-  'all public business RPCs run with a fixed definer boundary'
+  'all helper and business RPCs run with a fixed definer search path'
 );
 
 select extensions.ok(

@@ -313,6 +313,28 @@ $$;
 revoke all on function public.is_conversation_member(uuid, boolean) from public, anon;
 grant execute on function public.is_conversation_member(uuid, boolean) to authenticated;
 
+create or replace function public.can_read_conversation_message(
+  p_conversation_id uuid,
+  p_message_created_at timestamptz
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversation_members
+    where conversation_id = p_conversation_id
+      and profile_id = (select auth.uid())
+      and (left_at is null or p_message_created_at <= left_at)
+  );
+$$;
+
+revoke all on function public.can_read_conversation_message(uuid, timestamptz) from public, anon;
+grant execute on function public.can_read_conversation_message(uuid, timestamptz) to authenticated;
+
 create policy "Authenticated users can read active places"
 on public.places
 for select
@@ -330,11 +352,21 @@ on public.activity_participations
 for select
 to authenticated
 using (
-  exists (
+  profile_id = (select auth.uid())
+  or exists (
     select 1
     from public.activities
     where activities.id = activity_participations.activity_id
-      and (activities.status <> 'disabled' or activities.creator_id = (select auth.uid()))
+      and activities.creator_id = (select auth.uid())
+  )
+  or (
+    status = 'joined'
+    and exists (
+      select 1
+      from public.activities
+      where activities.id = activity_participations.activity_id
+        and activities.status <> 'disabled'
+    )
   )
 );
 
@@ -363,13 +395,16 @@ create policy "Members can read conversation membership"
 on public.conversation_members
 for select
 to authenticated
-using ((select public.is_conversation_member(conversation_id, false)));
+using (
+  profile_id = (select auth.uid())
+  or (select public.is_conversation_member(conversation_id, true))
+);
 
 create policy "Members can read conversation messages"
 on public.messages
 for select
 to authenticated
-using ((select public.is_conversation_member(conversation_id, false)));
+using ((select public.can_read_conversation_message(conversation_id, created_at)));
 
 drop trigger if exists set_places_updated_at on public.places;
 create trigger set_places_updated_at
