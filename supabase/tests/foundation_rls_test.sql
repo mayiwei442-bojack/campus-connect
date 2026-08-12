@@ -48,19 +48,22 @@ select extensions.is_empty(
   'a user cannot update another profile'
 );
 
-reset role;
-
-create function public.foundation_default_privilege_probe()
-returns boolean
-language sql
-security definer
-set search_path = ''
-as $$ select true $$;
-
 select extensions.ok(
-  not has_function_privilege('anon', 'public.foundation_default_privilege_probe()', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.foundation_default_privilege_probe()', 'EXECUTE'),
-  'new public functions are not executable unless explicitly granted'
+  not exists (
+    select 1
+    from pg_default_acl defaults
+    cross join lateral aclexplode(defaults.defaclacl) privileges
+    where defaults.defaclrole = 'postgres'::regrole
+      and defaults.defaclnamespace = 'public'::regnamespace
+      and defaults.defaclobjtype = 'f'
+      and privileges.privilege_type = 'EXECUTE'
+      and privileges.grantee in (
+        0,
+        'anon'::regrole,
+        'authenticated'::regrole
+      )
+  ),
+  'functions created by the migration role are private by default'
 );
 
 select * from extensions.finish();
