@@ -245,7 +245,7 @@ otp_expiry = 3600
 
 [auth.email.template.confirmation]
 subject = "确认你的 Campus Connect 账号"
-content_path = "./templates/confirmation.html"
+content_path = "./supabase/templates/confirmation.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

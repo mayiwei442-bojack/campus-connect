@@ -31,6 +31,10 @@ pnpm exec supabase db push
 
 首个迁移会创建 `public.profiles`、用户注册触发器和 RLS 策略。不要直接在 Dashboard 修改同一结构，否则迁移历史可能漂移。
 
+如果本机没有 IPv6，Supabase CLI 应使用 Dashboard 的 Session Pooler（IPv4）。重新 `link` 时通过
+`SUPABASE_DB_PASSWORD` 临时环境变量提供数据库密码；不要把密码写入仓库、命令历史或聊天。项目的
+Session Pooler 连接信息可在 Dashboard 顶部的 Connect 对话框查看。
+
 ## 3. 配置邮箱确认
 
 在 Authentication 的 URL Configuration 中设置：
