@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(27);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -20,6 +20,42 @@ insert into persona_ai_state (key, value)
 values (
   'persona',
   public.create_persona('摄影现场', '校园摄影与构图', '只采纳主人确认过的条目', 'private')
+);
+
+select extensions.throws_ok(
+  format(
+    'select public.register_persona_asset(%L::uuid, %L, %L, %s, null)',
+    (select value from persona_ai_state where key = 'persona'),
+    '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/missing.webp',
+    'image/webp',
+    2048
+  ),
+  '22023',
+  'PERSONA_STORAGE_OBJECT_MISMATCH',
+  'asset metadata cannot be registered for a missing Storage object'
+);
+
+insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+values (
+  '86666666-6666-4666-8666-666666666661',
+  'persona-assets',
+  '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/scene.webp',
+  '81111111-1111-4111-8111-111111111111'::uuid,
+  '81111111-1111-4111-8111-111111111111',
+  '{"mimetype":"image/webp","size":2048}'::jsonb
+);
+
+select extensions.throws_ok(
+  format(
+    'select public.register_persona_asset(%L::uuid, %L, %L, %s, null)',
+    (select value from persona_ai_state where key = 'persona'),
+    '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/scene.webp',
+    'image/png',
+    1024
+  ),
+  '22023',
+  'PERSONA_STORAGE_OBJECT_MISMATCH',
+  'asset registration rejects forged MIME type and byte size'
 );
 
 insert into persona_ai_state (key, value)
@@ -98,6 +134,20 @@ select extensions.is(
   'a rejected proposal remains excluded from confirmed knowledge'
 );
 
+delete from storage.objects
+where bucket_id = 'persona-assets'
+  and name = '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/scene.webp';
+
+select extensions.is(
+  (
+    select count(*)::integer from storage.objects
+    where bucket_id = 'persona-assets'
+      and name = '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/scene.webp'
+  ),
+  1,
+  'registered Storage objects cannot be deleted directly around the metadata boundary'
+);
+
 insert into persona_ai_context (key, value)
 values (
   'previous_analysis',
@@ -108,6 +158,17 @@ values (
     (select value from persona_ai_state where key = 'persona'),
     (select value from persona_ai_state where key = 'asset')
   )
+);
+
+select extensions.throws_ok(
+  format(
+    'select public.prepare_persona_asset_deletion(%L::uuid, %L::uuid)',
+    (select value from persona_ai_state where key = 'persona'),
+    (select value from persona_ai_state where key = 'asset')
+  ),
+  '55000',
+  'ANALYSIS_IN_PROGRESS',
+  'deletion cannot race an active image analysis'
 );
 
 select extensions.throws_ok(
@@ -137,6 +198,17 @@ select public.confirm_persona_entry((
     and knowledge_key = '夜景经验'
     and status = 'draft'
 ));
+
+select extensions.throws_ok(
+  format(
+    'select public.prepare_persona_asset_deletion(%L::uuid, %L::uuid)',
+    (select value from persona_ai_state where key = 'persona'),
+    (select value from persona_ai_state where key = 'asset')
+  ),
+  '55000',
+  'CONFIRMED_SOURCE_CANNOT_BE_DELETED',
+  'an image that remains confirmed knowledge provenance cannot be deleted'
+);
 
 select extensions.is(
   (select count(*)::integer from public.persona_entries where persona_id = (select value from persona_ai_state where key = 'persona') and status = 'confirmed'),
@@ -182,13 +254,71 @@ select extensions.throws_ok(
   'callers cannot create arbitrary limiter scopes'
 );
 
+insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+values (
+  '86666666-6666-4666-8666-666666666662',
+  'persona-assets',
+  '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/disposable.webp',
+  '81111111-1111-4111-8111-111111111111'::uuid,
+  '81111111-1111-4111-8111-111111111111',
+  '{"mimetype":"image/webp","size":1024}'::jsonb
+);
+
+insert into persona_ai_state (key, value)
+values (
+  'disposable_asset',
+  public.register_persona_asset(
+    (select value from persona_ai_state where key = 'persona'),
+    '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/disposable.webp',
+    'image/webp',
+    1024,
+    null
+  )
+);
+
+select extensions.is(
+  public.prepare_persona_asset_deletion(
+    (select value from persona_ai_state where key = 'persona'),
+    (select value from persona_ai_state where key = 'disposable_asset')
+  ),
+  '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/disposable.webp',
+  'the deletion transaction locks and removes unconfirmed asset metadata before returning its trusted path'
+);
+
+select extensions.is_empty(
+  $$select id from public.persona_assets where id = (select value from persona_ai_state where key = 'disposable_asset')$$,
+  'prepared deletion leaves no dangling public asset metadata'
+);
+
+delete from storage.objects
+where bucket_id = 'persona-assets'
+  and name = '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/disposable.webp';
+
+select extensions.is_empty(
+  $$select id from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid$$,
+  'only the now-orphaned Storage object becomes deletable by its owner'
+);
+
+select extensions.throws_ok(
+  format(
+    'select public.delete_persona(%L::uuid)',
+    (select value from persona_ai_state where key = 'persona')
+  ),
+  '55000',
+  'PERSONA_HAS_ASSETS',
+  'a Persona cannot be deleted while private Storage provenance still exists'
+);
+
 reset role;
 
 select extensions.ok(
   has_function_privilege('authenticated', 'public.begin_persona_asset_analysis(uuid,uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.complete_persona_asset_analysis(uuid,uuid,uuid,text,jsonb)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.prepare_persona_asset_deletion(uuid,uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.delete_persona(uuid)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.begin_persona_asset_analysis(uuid,uuid)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.complete_persona_asset_analysis(uuid,uuid,uuid,text,jsonb)', 'EXECUTE'),
+  and not has_function_privilege('anon', 'public.complete_persona_asset_analysis(uuid,uuid,uuid,text,jsonb)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.prepare_persona_asset_deletion(uuid,uuid)', 'EXECUTE'),
   'only authenticated users can call the owner-bound analysis transitions'
 );
 
@@ -205,6 +335,9 @@ select extensions.ok(
     from pg_proc
     where oid = any (array[
       'public.consume_persona_ai_rate_limit(text)'::regprocedure::oid,
+      'public.register_persona_asset(uuid,text,text,integer,text)'::regprocedure::oid,
+      'public.prepare_persona_asset_deletion(uuid,uuid)'::regprocedure::oid,
+      'public.delete_persona(uuid)'::regprocedure::oid,
       'public.begin_persona_asset_analysis(uuid,uuid)'::regprocedure::oid,
       'public.complete_persona_asset_analysis(uuid,uuid,uuid,text,jsonb)'::regprocedure::oid,
       'public.fail_persona_asset_analysis(uuid,uuid,uuid,text)'::regprocedure::oid
@@ -218,6 +351,12 @@ select extensions.ok(
   and has_function_privilege('authenticated', 'public.consume_persona_ai_rate_limit(text)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.fail_persona_asset_analysis(uuid,uuid,uuid,text)', 'EXECUTE'),
   'Persona AI rate and failure transitions expose only the intended authenticated boundary'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.persona_assets', 'DELETE')
+  and not has_table_privilege('authenticated', 'public.personas', 'DELETE'),
+  'clients cannot bypass locked Persona deletion transactions with direct table deletes'
 );
 
 select * from extensions.finish();

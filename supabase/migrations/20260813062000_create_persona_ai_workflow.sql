@@ -1,6 +1,181 @@
 alter table public.persona_assets
 add column analysis_nonce uuid;
 
+revoke delete on table public.persona_assets from authenticated;
+drop policy if exists "Owners can delete persona assets" on public.persona_assets;
+revoke delete on table public.personas from authenticated;
+drop policy if exists "Owners can delete personas" on public.personas;
+
+create or replace function public.register_persona_asset(
+  p_persona_id uuid,
+  p_storage_path text,
+  p_mime_type text,
+  p_byte_size integer,
+  p_user_description text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  viewer_id uuid := auth.uid();
+  created_id uuid;
+  stored_mime_type text;
+  stored_byte_size bigint;
+begin
+  if viewer_id is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  if not exists (
+    select 1 from public.personas
+    where id = p_persona_id and owner_id = viewer_id
+  ) then
+    raise exception 'PERSONA_NOT_FOUND' using errcode = '42501';
+  end if;
+
+  if p_storage_path not like viewer_id::text || '/' || p_persona_id::text || '/%'
+    or p_mime_type not in ('image/jpeg', 'image/png', 'image/webp')
+    or p_byte_size not between 1 and 7340032
+    or char_length(coalesce(p_user_description, '')) > 500 then
+    raise exception 'INVALID_PERSONA_ASSET' using errcode = '22023';
+  end if;
+
+  select
+    metadata ->> 'mimetype',
+    coalesce(
+      nullif(metadata ->> 'size', '')::bigint,
+      nullif(metadata ->> 'contentLength', '')::bigint
+    )
+  into stored_mime_type, stored_byte_size
+  from storage.objects
+  where bucket_id = 'persona-assets'
+    and name = p_storage_path
+    and owner_id = viewer_id::text
+  for update;
+
+  if stored_mime_type is null
+    or stored_byte_size is null
+    or stored_mime_type <> p_mime_type
+    or stored_byte_size <> p_byte_size then
+    raise exception 'PERSONA_STORAGE_OBJECT_MISMATCH' using errcode = '22023';
+  end if;
+
+  insert into public.persona_assets (
+    persona_id, owner_id, storage_path, mime_type, byte_size, user_description
+  ) values (
+    p_persona_id,
+    viewer_id,
+    p_storage_path,
+    stored_mime_type,
+    stored_byte_size::integer,
+    nullif(btrim(p_user_description), '')
+  )
+  returning id into created_id;
+
+  return created_id;
+end;
+$$;
+
+create or replace function public.prepare_persona_asset_deletion(
+  p_persona_id uuid,
+  p_asset_id uuid
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  viewer_id uuid := auth.uid();
+  target public.persona_assets%rowtype;
+begin
+  if viewer_id is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  select * into target
+  from public.persona_assets
+  where id = p_asset_id
+    and persona_id = p_persona_id
+    and owner_id = viewer_id
+  for update;
+
+  if target.id is null then
+    raise exception 'PERSONA_ASSET_NOT_FOUND' using errcode = '42501';
+  end if;
+  if target.analysis_status = 'analyzing' then
+    raise exception 'ANALYSIS_IN_PROGRESS' using errcode = '55000';
+  end if;
+  if exists (
+    select 1 from public.persona_entries
+    where source_asset_id = target.id
+      and status = 'confirmed'
+  ) then
+    raise exception 'CONFIRMED_SOURCE_CANNOT_BE_DELETED' using errcode = '55000';
+  end if;
+
+  delete from public.persona_entries
+  where source_asset_id = target.id
+    and owner_id = viewer_id;
+
+  delete from public.persona_assets
+  where id = target.id;
+
+  return target.storage_path;
+end;
+$$;
+
+create or replace function public.delete_persona(p_persona_id uuid)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  viewer_id uuid := auth.uid();
+begin
+  if viewer_id is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  perform 1 from public.profiles where id = viewer_id for update;
+  perform 1 from public.personas
+  where id = p_persona_id and owner_id = viewer_id
+  for update;
+
+  if not found then
+    raise exception 'PERSONA_NOT_FOUND' using errcode = '42501';
+  end if;
+  if exists (
+    select 1 from public.persona_assets
+    where persona_id = p_persona_id
+  ) then
+    raise exception 'PERSONA_HAS_ASSETS' using errcode = '55000';
+  end if;
+
+  delete from public.personas
+  where id = p_persona_id and owner_id = viewer_id;
+end;
+$$;
+
+drop policy if exists "Persona owners can delete unreferenced assets" on storage.objects;
+create policy "Persona owners can delete orphan assets"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'persona-assets'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+  and not exists (
+    select 1 from public.persona_assets
+    where persona_assets.storage_path = name
+  )
+);
+
 create or replace function public.consume_persona_ai_rate_limit(p_scope text)
 returns boolean
 language plpgsql
@@ -237,11 +412,17 @@ end;
 $$;
 
 revoke all on function public.consume_persona_ai_rate_limit(text) from public, anon, authenticated;
+revoke all on function public.register_persona_asset(uuid, text, text, integer, text) from public, anon, authenticated;
+revoke all on function public.prepare_persona_asset_deletion(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.delete_persona(uuid) from public, anon, authenticated;
 revoke all on function public.begin_persona_asset_analysis(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.complete_persona_asset_analysis(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
 revoke all on function public.fail_persona_asset_analysis(uuid, uuid, uuid, text) from public, anon, authenticated;
 
 grant execute on function public.consume_persona_ai_rate_limit(text) to authenticated;
+grant execute on function public.register_persona_asset(uuid, text, text, integer, text) to authenticated;
+grant execute on function public.prepare_persona_asset_deletion(uuid, uuid) to authenticated;
+grant execute on function public.delete_persona(uuid) to authenticated;
 grant execute on function public.begin_persona_asset_analysis(uuid, uuid) to authenticated;
 grant execute on function public.complete_persona_asset_analysis(uuid, uuid, uuid, text, jsonb) to authenticated;
 grant execute on function public.fail_persona_asset_analysis(uuid, uuid, uuid, text) to authenticated;

@@ -105,27 +105,18 @@ export function PersonaStudio({ isOwner, personas, viewerId }: { isOwner: boolea
     const data = new FormData(form);
     const file = data.get("image");
     if (!(file instanceof File) || !file.size) return setError("请选择图片。");
-    if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 7 * 1024 * 1024) {
-      return setError("请选择 7 MB 以内的 JPG、PNG 或 WebP 图片。");
+    if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 4 * 1024 * 1024) {
+      return setError("请选择 4 MB 以内的 JPG、PNG 或 WebP 图片。");
     }
 
     begin(`upload:${personaId}`);
-    const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const path = `${viewerId}/${personaId}/${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await supabase.storage.from("persona-assets").upload(path, file, { contentType: file.type, upsert: false });
-    if (uploadError) return fail(uploadError, "图片上传失败。");
-
-    const { data: assetId, error: registerError } = await supabase.rpc("register_persona_asset", {
-      p_persona_id: personaId,
-      p_storage_path: path,
-      p_mime_type: file.type,
-      p_byte_size: file.size,
-      p_user_description: String(data.get("description") ?? "").trim() || undefined,
-    });
-    if (registerError || !assetId) {
-      await supabase.storage.from("persona-assets").remove([path]);
-      return fail(registerError, "图片记录创建失败。");
-    }
+    const uploadPayload = new FormData();
+    uploadPayload.set("image", file);
+    uploadPayload.set("description", String(data.get("description") ?? "").trim());
+    const uploadResponse = await fetch(`/api/personas/${personaId}/assets`, { method: "POST", body: uploadPayload });
+    const uploadResult = await uploadResponse.json() as { assetId?: string; error?: string };
+    if (!uploadResponse.ok || !uploadResult.assetId) return fail(new Error(uploadResult.error || "图片记录创建失败。"), "图片记录创建失败。");
+    const assetId = uploadResult.assetId;
 
     form.reset();
     const response = await fetch(`/api/personas/${personaId}/assets/analyze`, {
@@ -182,9 +173,13 @@ export function PersonaStudio({ isOwner, personas, viewerId }: { isOwner: boolea
 
   async function deleteAsset(personaId: string, assetId: string, path: string) {
     begin(`delete-asset:${assetId}`);
-    const { error: deleteError } = await supabase.from("persona_assets").delete().eq("id", assetId).eq("persona_id", personaId);
-    if (deleteError) return fail(deleteError, "图片记录删除失败。");
-    await supabase.storage.from("persona-assets").remove([path]);
+    const response = await fetch(`/api/personas/${personaId}/assets`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId, storagePath: path }),
+    });
+    const payload = await response.json() as { error?: string };
+    if (!response.ok) return fail(new Error(payload.error || "图片删除失败。"), "图片删除失败。");
     finish("图片已移除；已确认的文字知识仍会保留。 ");
   }
 
@@ -194,10 +189,8 @@ export function PersonaStudio({ isOwner, personas, viewerId }: { isOwner: boolea
       return;
     }
     begin(`delete:${persona.id}`);
-    const paths = persona.assets.map((asset) => asset.storage_path);
-    const { error: deleteError } = await supabase.from("personas").delete().eq("id", persona.id);
-    if (deleteError) return fail(deleteError, "Persona 删除失败。");
-    if (paths.length) await supabase.storage.from("persona-assets").remove(paths);
+    const { error: deleteError } = await supabase.rpc("delete_persona", { p_persona_id: persona.id });
+    if (deleteError) return fail(new Error(deleteError.message.includes("PERSONA_HAS_ASSETS") ? "请先移除所有未被已确认知识引用的图片；如需删除来源图，请先删除对应知识。" : "Persona 删除失败。"), "Persona 删除失败。");
     setDeleteConfirm("");
     finish("Persona 已删除。");
   }

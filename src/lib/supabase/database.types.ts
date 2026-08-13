@@ -850,6 +850,11 @@ export type Database = {
         Args: { p_activity_id: string }
         Returns: string
       }
+      prepare_persona_asset_deletion: {
+        Args: { p_asset_id: string; p_persona_id: string }
+        Returns: string
+      }
+      delete_persona: { Args: { p_persona_id: string }; Returns: undefined }
       record_persona_question_topic: {
         Args: {
           p_persona_id: string
