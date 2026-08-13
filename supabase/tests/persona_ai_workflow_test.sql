@@ -298,11 +298,16 @@ select extensions.is_empty(
   'prepared deletion leaves no dangling public asset metadata'
 );
 
+reset role;
+
 select extensions.is(
   (select count(*)::integer from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid),
   1,
-  'the orphan remains available for deletion through the owner-authenticated Storage API'
+  'the orphan remains stored for deletion through the owner-authenticated Storage API'
 );
+
+set local role authenticated;
+set local request.jwt.claim.sub = '81111111-1111-4111-8111-111111111111';
 
 select extensions.throws_ok(
   format(
