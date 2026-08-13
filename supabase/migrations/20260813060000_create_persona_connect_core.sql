@@ -30,6 +30,23 @@ exception
 end
 $$;
 
+do $$
+begin
+  create type public.persona_question_topic_kind as enum (
+    'background',
+    'experience',
+    'preference',
+    'availability',
+    'learning',
+    'collaboration',
+    'boundary',
+    'other'
+  );
+exception
+  when duplicate_object then null;
+end
+$$;
+
 create table public.personas (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
@@ -53,7 +70,7 @@ create table public.persona_assets (
   mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')),
   byte_size integer not null check (byte_size between 1 and 10485760),
   user_description text check (user_description is null or char_length(user_description) <= 500),
-  is_visible boolean not null default true,
+  is_visible boolean not null default false,
   analysis_status public.persona_asset_status not null default 'uploaded',
   analysis_error text check (analysis_error is null or char_length(analysis_error) <= 500),
   model_name text check (model_name is null or char_length(model_name) <= 100),
@@ -92,7 +109,6 @@ create table public.persona_question_topics (
   topic_key text not null check (char_length(btrim(topic_key)) between 2 and 80),
   topic_label text not null check (char_length(btrim(topic_label)) between 2 and 80),
   question_count integer not null default 1 check (question_count > 0),
-  last_asked_at timestamptz not null default timezone('utc', now()),
   created_at timestamptz not null default timezone('utc', now()),
   unique (persona_id, topic_key)
 );
@@ -122,7 +138,11 @@ alter table public.persona_entries enable row level security;
 alter table public.persona_question_topics enable row level security;
 alter table public.blocks enable row level security;
 
-create or replace function public.is_blocked_with_viewer(p_other_profile_id uuid)
+create schema if not exists app_private;
+revoke all on schema app_private from public, anon, authenticated;
+grant usage on schema app_private to authenticated;
+
+create or replace function app_private.is_blocked_with_viewer(p_other_profile_id uuid)
 returns boolean
 language sql
 stable
@@ -137,6 +157,9 @@ as $$
   );
 $$;
 
+revoke all on function app_private.is_blocked_with_viewer(uuid) from public, anon, authenticated;
+grant execute on function app_private.is_blocked_with_viewer(uuid) to authenticated;
+
 revoke all on table public.personas from anon, authenticated;
 revoke all on table public.persona_assets from anon, authenticated;
 revoke all on table public.persona_entries from anon, authenticated;
@@ -148,7 +171,7 @@ grant update (name, topic, summary, visibility, is_enabled, allow_matching, upda
 grant delete on table public.personas to authenticated;
 
 grant select on table public.persona_assets to authenticated;
-grant update (user_description, is_visible, analysis_status, analysis_error, model_name, updated_at) on table public.persona_assets to authenticated;
+grant update (user_description, is_visible, updated_at) on table public.persona_assets to authenticated;
 grant delete on table public.persona_assets to authenticated;
 
 grant select on table public.persona_entries to authenticated;
@@ -168,7 +191,7 @@ using (
   or (
     visibility = 'public'
     and is_enabled = true
-    and not public.is_blocked_with_viewer(owner_id)
+    and not app_private.is_blocked_with_viewer(owner_id)
     and exists (
       select 1
       from public.profiles
@@ -225,7 +248,7 @@ using (
   (select auth.uid()) = owner_id
   or (
     status = 'confirmed'
-    and not public.is_blocked_with_viewer(owner_id)
+    and not app_private.is_blocked_with_viewer(owner_id)
     and exists (
       select 1
       from public.personas
@@ -272,7 +295,10 @@ create policy "Owners can read anonymous persona topic aggregates"
 on public.persona_question_topics
 for select
 to authenticated
-using ((select auth.uid()) = owner_id);
+using (
+  (select auth.uid()) = owner_id
+  and question_count >= 3
+);
 
 create policy "Users can read their own blocks"
 on public.blocks
@@ -291,6 +317,40 @@ on public.blocks
 for delete
 to authenticated
 using ((select auth.uid()) = blocker_id);
+
+drop policy if exists "Authenticated users can read visible profiles" on public.profiles;
+
+create policy "Authenticated users can read visible profiles"
+on public.profiles
+for select
+to authenticated
+using (
+  (select auth.uid()) = id
+  or (
+    is_public = true
+    and not app_private.is_blocked_with_viewer(id)
+  )
+);
+
+drop policy if exists "Users can read eligible profile skills" on public.profile_skills;
+
+create policy "Users can read eligible profile skills"
+on public.profile_skills
+for select
+to authenticated
+using (
+  (select auth.uid()) = profile_id
+  or (
+    is_public = true
+    and not app_private.is_blocked_with_viewer(profile_id)
+    and exists (
+      select 1
+      from public.profiles
+      where profiles.id = profile_skills.profile_id
+        and profiles.is_public = true
+    )
+  )
+);
 
 create or replace function public.create_persona(
   p_name text,
@@ -456,7 +516,7 @@ $$;
 
 create or replace function public.record_persona_question_topic(
   p_persona_id uuid,
-  p_topic_label text
+  p_topic public.persona_question_topic_kind
 )
 returns void
 language plpgsql
@@ -466,15 +526,23 @@ as $$
 declare
   viewer_id uuid := auth.uid();
   persona_owner uuid;
-  normalized_topic text := lower(btrim(coalesce(p_topic_label, '')));
+  normalized_topic text := p_topic::text;
+  safe_label text;
 begin
   if viewer_id is null then
     raise exception 'authentication_required';
   end if;
 
-  if char_length(normalized_topic) not between 2 and 80 then
-    raise exception 'invalid_question_topic';
-  end if;
+  safe_label := case p_topic
+    when 'background' then '背景经历'
+    when 'experience' then '相关经验'
+    when 'preference' then '偏好与风格'
+    when 'availability' then '时间安排'
+    when 'learning' then '学习方向'
+    when 'collaboration' then '合作方式'
+    when 'boundary' then '边界与禁区'
+    else '其他主题'
+  end;
 
   select personas.owner_id into persona_owner
   from public.personas
@@ -495,12 +563,11 @@ begin
   insert into public.persona_question_topics (
     persona_id, owner_id, topic_key, topic_label
   ) values (
-    p_persona_id, persona_owner, normalized_topic, btrim(p_topic_label)
+    p_persona_id, persona_owner, normalized_topic, safe_label
   )
   on conflict (persona_id, topic_key) do update
   set question_count = persona_question_topics.question_count + 1,
-      topic_label = excluded.topic_label,
-      last_asked_at = timezone('utc', now());
+      topic_label = excluded.topic_label;
 end;
 $$;
 
@@ -677,20 +744,18 @@ end;
 $$;
 
 revoke all on function public.create_persona(text, text, text, public.persona_visibility) from public, anon, authenticated;
-revoke all on function public.is_blocked_with_viewer(uuid) from public, anon, authenticated;
 revoke all on function public.register_persona_asset(uuid, text, text, integer, text) from public, anon, authenticated;
 revoke all on function public.confirm_persona_entry(uuid) from public, anon, authenticated;
 revoke all on function public.reject_persona_entry(uuid) from public, anon, authenticated;
-revoke all on function public.record_persona_question_topic(uuid, text) from public, anon, authenticated;
+revoke all on function public.record_persona_question_topic(uuid, public.persona_question_topic_kind) from public, anon, authenticated;
 revoke all on function public.can_read_persona_asset(text) from public, anon, authenticated;
 revoke all on function public.get_connect_candidates(text[], timestamptz, timestamptz, integer) from public, anon, authenticated;
 
 grant execute on function public.create_persona(text, text, text, public.persona_visibility) to authenticated;
-grant execute on function public.is_blocked_with_viewer(uuid) to authenticated;
 grant execute on function public.register_persona_asset(uuid, text, text, integer, text) to authenticated;
 grant execute on function public.confirm_persona_entry(uuid) to authenticated;
 grant execute on function public.reject_persona_entry(uuid) to authenticated;
-grant execute on function public.record_persona_question_topic(uuid, text) to authenticated;
+grant execute on function public.record_persona_question_topic(uuid, public.persona_question_topic_kind) to authenticated;
 grant execute on function public.can_read_persona_asset(text) to authenticated;
 grant execute on function public.get_connect_candidates(text[], timestamptz, timestamptz, integer) to authenticated;
 

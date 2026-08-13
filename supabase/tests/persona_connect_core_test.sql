@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(40);
+select plan(44);
 
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.personas'::regclass), 'personas has RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid = 'public.persona_assets'::regclass), 'persona assets has RLS enabled');
@@ -27,7 +27,7 @@ select extensions.ok(
   and has_function_privilege('authenticated', 'public.register_persona_asset(uuid,text,text,integer,text)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.confirm_persona_entry(uuid)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.reject_persona_entry(uuid)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.record_persona_question_topic(uuid,text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.record_persona_question_topic(uuid,public.persona_question_topic_kind)', 'EXECUTE')
   and has_function_privilege('authenticated', 'public.get_connect_candidates(text[],timestamptz,timestamptz,integer)', 'EXECUTE'),
   'authenticated users can call bounded Persona and Connect RPCs'
 );
@@ -175,15 +175,25 @@ select extensions.is_empty(
 );
 
 select extensions.lives_ok(
-  $$select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'Training schedule')$$,
+  $$select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'availability')$$,
   'a viewer can add only an anonymous topic aggregate'
 );
 
 set local request.jwt.claim.sub = '61111111-1111-4111-8111-111111111111';
+select extensions.is_empty(
+  $$select id from public.persona_question_topics where persona_id = (select value from persona_test_state where key = 'public_persona')$$,
+  'a low-volume topic remains hidden to reduce re-identification risk'
+);
+
+set local request.jwt.claim.sub = '62222222-2222-4222-8222-222222222222';
+select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'availability');
+select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'availability');
+
+set local request.jwt.claim.sub = '61111111-1111-4111-8111-111111111111';
 select extensions.results_eq(
   $$select topic_label, question_count from public.persona_question_topics where persona_id = (select value from persona_test_state where key = 'public_persona')$$,
-  $$values ('Training schedule'::text, 1::integer)$$,
-  'the owner sees a topic count but no stranger transcript'
+  $$values ('时间安排'::text, 3::integer)$$,
+  'the owner sees only a thresholded fixed category and count, never a stranger transcript'
 );
 
 set local request.jwt.claim.sub = '62222222-2222-4222-8222-222222222222';
@@ -211,9 +221,15 @@ values (
 );
 
 select extensions.ok(
-  exists (select 1 from public.persona_assets where id = (select value from persona_test_state where key = 'asset')),
-  'the owner can read private source metadata'
+  exists (
+    select 1 from public.persona_assets
+    where id = (select value from persona_test_state where key = 'asset')
+      and is_visible = false
+  ),
+  'new source images are private by default and visible only to the owner'
 );
+
+update public.persona_assets set is_visible = true where id = (select value from persona_test_state where key = 'asset');
 
 set local request.jwt.claim.sub = '62222222-2222-4222-8222-222222222222';
 select extensions.is_empty(
@@ -238,6 +254,17 @@ select extensions.ok(
   'a hidden image cannot be read by a viewer'
 );
 
+set local request.jwt.claim.sub = '61111111-1111-4111-8111-111111111111';
+with created_skill as (
+  insert into public.skills (name, kind, created_by)
+  values ('Campus Football', 'interest', '61111111-1111-4111-8111-111111111111')
+  returning id
+)
+insert into public.profile_skills (profile_id, skill_id, self_rating, note)
+select '61111111-1111-4111-8111-111111111111', id, 4, 'Available for evening matches'
+from created_skill;
+
+set local request.jwt.claim.sub = '62222222-2222-4222-8222-222222222222';
 insert into public.blocks (blocker_id, blocked_id)
 values ('62222222-2222-4222-8222-222222222222', '61111111-1111-4111-8111-111111111111');
 
@@ -259,8 +286,18 @@ select extensions.is_empty(
   'a block in either direction hides public Persona data'
 );
 
+select extensions.is_empty(
+  $$select id from public.profiles where id = '61111111-1111-4111-8111-111111111111'$$,
+  'a block in either direction hides the public Profile direct-query path'
+);
+
+select extensions.is_empty(
+  $$select id from public.profile_skills where profile_id = '61111111-1111-4111-8111-111111111111'$$,
+  'a block in either direction hides the public Skill direct-query path'
+);
+
 select extensions.throws_ok(
-  $$select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'Blocked topic')$$,
+  $$select public.record_persona_question_topic((select value from persona_test_state where key = 'public_persona'), 'other')$$,
   'P0001',
   'persona_not_found',
   'a blocked viewer cannot add anonymous Persona topics'
@@ -269,16 +306,6 @@ select extensions.throws_ok(
 delete from public.blocks
 where blocker_id = '62222222-2222-4222-8222-222222222222'
   and blocked_id = '61111111-1111-4111-8111-111111111111';
-
-set local request.jwt.claim.sub = '61111111-1111-4111-8111-111111111111';
-with created_skill as (
-  insert into public.skills (name, kind, created_by)
-  values ('Campus Football', 'interest', '61111111-1111-4111-8111-111111111111')
-  returning id
-)
-insert into public.profile_skills (profile_id, skill_id, self_rating, note)
-select '61111111-1111-4111-8111-111111111111', id, 4, 'Available for evening matches'
-from created_skill;
 
 set local request.jwt.claim.sub = '62222222-2222-4222-8222-222222222222';
 select extensions.ok(
@@ -349,16 +376,21 @@ select extensions.is_empty(
 reset role;
 
 select extensions.ok(
+  to_regprocedure('public.is_blocked_with_viewer(uuid)') is null,
+  'the incoming-block helper is not exposed as a public RPC'
+);
+
+select extensions.ok(
   (
     select bool_and(prosecdef and 'search_path=""' = any (coalesce(proconfig, array[]::text[])))
     from pg_proc
     where oid = any (array[
-      'public.is_blocked_with_viewer(uuid)'::regprocedure,
+      'app_private.is_blocked_with_viewer(uuid)'::regprocedure,
       'public.create_persona(text,text,text,public.persona_visibility)'::regprocedure,
       'public.register_persona_asset(uuid,text,text,integer,text)'::regprocedure,
       'public.confirm_persona_entry(uuid)'::regprocedure,
       'public.reject_persona_entry(uuid)'::regprocedure,
-      'public.record_persona_question_topic(uuid,text)'::regprocedure,
+      'public.record_persona_question_topic(uuid,public.persona_question_topic_kind)'::regprocedure,
       'public.can_read_persona_asset(text)'::regprocedure,
       'public.get_connect_candidates(text[],timestamptz,timestamptz,integer)'::regprocedure
     ])
