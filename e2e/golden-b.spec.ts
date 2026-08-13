@@ -59,7 +59,7 @@ test.describe.serial("Golden path B", () => {
     await connectorPage.goto(profileHref!);
     await expect(connectorPage.getByRole("heading", { name: E2E_USERS.candidate.nickname, exact: true })).toBeVisible();
     await expect(connectorPage.getByRole("heading", { name: "已公开的 Persona" })).toBeVisible();
-    await expect(connectorPage.getByRole("heading", { name: "共创搭档" })).toBeVisible();
+    await expect(connectorPage.getByRole("heading", { name: "共创搭档", exact: true })).toBeVisible();
     await expect(connectorPage.getByText("校园应用产品设计经验", { exact: false })).toBeVisible();
 
     await connectorPage.goto(invitationHref!);
