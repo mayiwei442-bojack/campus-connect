@@ -35,6 +35,18 @@ pnpm supabase:reset
 pnpm supabase:lint
 ```
 
+黄金路径 A 的 Playwright 验收使用独立的本地 Supabase，创建的测试账号不会进入远端项目；测试初始化也会拒绝连接任何非 `localhost` 的 Supabase URL：
+
+```bash
+pnpm exec playwright install chromium
+pnpm supabase:start
+pnpm supabase:reset
+pnpm test:e2e
+pnpm supabase:stop
+```
+
+GitHub Actions 会在所有合并至 `dev`/`main` 的 PR 上运行同一套多用户浏览器流程，失败时保留 trace、截图和录像。
+
 ## 当前基础路由
 
 - `/home`：登录后的统一入口
