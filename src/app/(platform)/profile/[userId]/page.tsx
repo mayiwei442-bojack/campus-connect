@@ -13,6 +13,7 @@ import {
 import { notFound } from "next/navigation";
 
 import { PersonaStudio } from "@/components/persona/persona-studio";
+import { ProfileBackgroundUpload } from "@/components/profile/profile-background-upload";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { SkillManager } from "@/components/skill/skill-manager";
 import { SkillShowcase } from "@/components/skill/skill-showcase";
@@ -33,8 +34,13 @@ type ProfilePageProps = {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function getInitials(nickname: string) {
-  return Array.from(nickname.replace(/\s+/g, "")).slice(0, 2).join("").toUpperCase() || "CC";
+function profileNameBadgeClass(nickname: string) {
+  const characterCount = Array.from(nickname.replace(/\s+/g, "")).length;
+
+  if (characterCount <= 3) return "text-3xl";
+  if (characterCount <= 6) return "text-xl";
+  if (characterCount <= 12) return "text-base";
+  return "text-xs";
 }
 
 function formatUpdatedAt(value: string) {
@@ -94,6 +100,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   if (personaError) {
     throw new Error("Persona 暂时无法读取");
   }
+
+  const { data: backgroundProfile } = await supabase
+    .from("profiles")
+    .select("background_path")
+    .eq("id", targetUserId)
+    .maybeSingle();
+  const backgroundResult = backgroundProfile?.background_path
+    ? await supabase.storage.from("profile-backgrounds").createSignedUrl(backgroundProfile.background_path, 1800)
+    : null;
+  const profileBackgroundUrl = backgroundResult?.data?.signedUrl ?? null;
 
   const isOwner = viewer.id === profile.id;
   const personaIds = (personaRows ?? []).map((persona) => persona.id);
@@ -195,17 +211,24 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   return (
     <section className="rise-in space-y-6">
       <header className="grid gap-6 overflow-hidden rounded-[2rem] border border-forest/10 bg-white/45 p-5 shadow-[0_24px_90px_rgba(20,35,31,0.07)] sm:p-7 lg:grid-cols-[minmax(17rem,0.7fr)_minmax(0,1.3fr)] lg:p-8">
-        <div className="relative min-h-72 overflow-hidden rounded-[1.6rem] bg-cobalt p-6 text-white sm:p-7">
+        <div
+          className="relative min-h-72 overflow-hidden rounded-[1.6rem] bg-cobalt bg-cover bg-center p-6 text-white sm:p-7"
+          style={profileBackgroundUrl ? { backgroundImage: `linear-gradient(180deg, rgba(9, 31, 46, 0.2), rgba(9, 31, 46, 0.56)), url(${profileBackgroundUrl})` } : undefined}
+        >
           <div className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full border border-white/12" />
           <div className="pointer-events-none absolute -right-6 top-5 size-36 rounded-full border border-white/10" />
           <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#123b58]/70 to-transparent" />
+          {isOwner ? <ProfileBackgroundUpload /> : null}
           <div className="relative flex h-full flex-col">
             <div className="flex items-center justify-between gap-4 font-mono text-[0.62rem] uppercase tracking-[0.18em] text-white/58">
               <span>Campus identity</span>
-              <span>{isOwner ? "Owner copy" : "Public copy"}</span>
+              <span className={isOwner ? "pr-32" : undefined}>{isOwner ? "Owner copy" : "Public copy"}</span>
             </div>
-            <div className="mt-8 grid size-24 place-items-center rounded-[1.7rem] border border-white/18 bg-white/10 font-display text-4xl font-semibold shadow-[0_18px_50px_rgba(9,31,46,0.22)]">
-              {getInitials(profile.nickname)}
+            <div
+              className={`mt-8 grid min-h-24 w-fit min-w-40 max-w-full place-items-center rounded-[1.7rem] border border-white/18 bg-white/10 px-5 text-center font-display font-semibold shadow-[0_18px_50px_rgba(9,31,46,0.22)] ${profileNameBadgeClass(profile.nickname)}`}
+              title={profile.nickname}
+            >
+              <span className="whitespace-nowrap">{profile.nickname}</span>
             </div>
             <div className="relative mt-auto pt-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-skyline">Member record</p>
