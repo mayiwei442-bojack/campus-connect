@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { MessagesWorkspace, type ConversationItem, type MessageItem } from "@/components/messages/messages-workspace";
+import {
+  MessagesWorkspace,
+  type ConversationItem,
+  type FriendRequestItem,
+  type MessageItem,
+} from "@/components/messages/messages-workspace";
 import { getViewer } from "@/lib/auth/viewer";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,8 +16,67 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   const [viewer, query, supabase] = await Promise.all([getViewer(), searchParams, createClient()]);
   if (!viewer) redirect("/login");
 
-  const { data: conversationRows } = await supabase.from("conversations").select("id, title, kind, activity_id, is_archived, updated_at").order("updated_at", { ascending: false });
-  const conversations: ConversationItem[] = conversationRows ?? [];
+  const [{ data: conversationRows }, { data: friendshipRows }] = await Promise.all([
+    supabase
+      .from("conversations")
+      .select("id, title, kind, activity_id, is_archived, updated_at")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("friendships")
+      .select("id, requester_id, addressee_id, introduction, requested_at")
+      .eq("status", "pending")
+      .order("requested_at", { ascending: false }),
+  ]);
+
+  const conversationIds = (conversationRows ?? []).map((conversation) => conversation.id);
+  const { data: directMemberRows } = conversationIds.length
+    ? await supabase
+        .from("conversation_members")
+        .select("conversation_id, profile_id")
+        .in("conversation_id", conversationIds)
+        .is("left_at", null)
+    : { data: [] };
+  const requestProfileIds = (friendshipRows ?? []).map((friendship) =>
+    friendship.requester_id === viewer.id ? friendship.addressee_id : friendship.requester_id,
+  );
+  const peerProfileIds = (directMemberRows ?? [])
+    .filter((member) => member.profile_id !== viewer.id)
+    .map((member) => member.profile_id);
+  const visibleProfileIds = [...new Set([...requestProfileIds, ...peerProfileIds])];
+  const { data: visibleProfiles } = visibleProfileIds.length
+    ? await supabase.from("profiles").select("id, nickname, campus").in("id", visibleProfileIds)
+    : { data: [] };
+  const profilesById = new Map((visibleProfiles ?? []).map((profile) => [profile.id, profile]));
+  const peerByConversation = new Map(
+    (directMemberRows ?? [])
+      .filter((member) => member.profile_id !== viewer.id)
+      .map((member) => [member.conversation_id, member.profile_id]),
+  );
+
+  const conversations: ConversationItem[] = (conversationRows ?? []).map((conversation) => {
+    const peerProfileId = conversation.kind === "direct" ? peerByConversation.get(conversation.id) ?? null : null;
+    return {
+      ...conversation,
+      peerProfileId,
+      title: conversation.kind === "direct"
+        ? profilesById.get(peerProfileId ?? "")?.nickname ?? "好友私聊"
+        : conversation.title,
+    };
+  });
+  const friendRequests: FriendRequestItem[] = (friendshipRows ?? []).map((friendship) => {
+    const incoming = friendship.addressee_id === viewer.id;
+    const profileId = incoming ? friendship.requester_id : friendship.addressee_id;
+    const profile = profilesById.get(profileId);
+    return {
+      id: friendship.id,
+      direction: incoming ? "incoming" : "outgoing",
+      introduction: friendship.introduction,
+      requestedAt: friendship.requested_at,
+      profileId,
+      nickname: profile?.nickname ?? "Campus member",
+      campus: profile?.campus ?? null,
+    };
+  });
   const requestedId = query.conversation;
   const activeId = conversations.some((conversation) => conversation.id === requestedId) ? requestedId! : conversations[0]?.id;
   let initialMessages: MessageItem[] = [];
@@ -32,5 +96,14 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
     }));
   }
 
-  return <MessagesWorkspace conversations={conversations} initialConversationId={activeId ?? null} initialMessages={initialMessages} viewerId={viewer.id} />;
+  return (
+    <MessagesWorkspace
+      conversations={conversations}
+      friendRequests={friendRequests}
+      initialConversationId={activeId ?? null}
+      initialMessages={initialMessages}
+      key={activeId ?? "empty"}
+      viewerId={viewer.id}
+    />
+  );
 }
