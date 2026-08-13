@@ -34,7 +34,8 @@ export async function createActivityAction(
   try {
     const draft = parseActivityDraft(formData);
     const { supabase } = await requireUser();
-    const { data: activityId, error } = await supabase.rpc("create_activity", {
+    const inviteeId = String(formData.get("inviteeId") ?? "").trim();
+    const activityArguments = {
       p_place_id: draft.placeId,
       p_title: draft.title,
       p_description: draft.description ?? undefined,
@@ -42,10 +43,13 @@ export async function createActivityAction(
       p_ends_at: draft.endsAt ?? undefined,
       p_capacity: draft.capacity ?? undefined,
       p_join_mode: draft.joinMode,
-    });
+    };
+    const { data: activityId, error } = inviteeId
+      ? await supabase.rpc("create_activity_with_invitation", { ...activityArguments, p_invitee_id: inviteeId })
+      : await supabase.rpc("create_activity", activityArguments);
 
     if (error || !activityId) {
-      return { status: "error", message: "活动创建失败，请稍后重试。" };
+      return { status: "error", message: inviteeId ? "活动或邀请创建失败，候选人可能已关闭匹配。" : "活动创建失败，请稍后重试。" };
     }
 
     refreshActivityPaths(activityId);

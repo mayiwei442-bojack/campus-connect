@@ -772,6 +772,19 @@ export type Database = {
         Args: { p_activity_id: string; p_invitee_id: string }
         Returns: string
       }
+      create_activity_with_invitation: {
+        Args: {
+          p_capacity?: number
+          p_description?: string
+          p_ends_at?: string
+          p_invitee_id: string
+          p_join_mode?: Database["public"]["Enums"]["activity_join_mode"]
+          p_place_id: string
+          p_starts_at?: string
+          p_title: string
+        }
+        Returns: string
+      }
       create_persona: {
         Args: {
           p_name: string
