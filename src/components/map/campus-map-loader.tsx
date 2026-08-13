@@ -13,7 +13,7 @@ const CampusMapExplorer = dynamic(
         <div>
           <div className="mx-auto size-8 animate-spin rounded-full border-2 border-paper/20 border-t-signal" />
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-paper/60">Loading spatial index</p>
-          <p className="mt-2 font-display text-xl font-semibold">正在载入 235 KB 校园场景</p>
+          <p className="mt-2 font-display text-xl font-semibold">正在载入 4.7 MB 校园场景</p>
         </div>
       </div>
     ),
