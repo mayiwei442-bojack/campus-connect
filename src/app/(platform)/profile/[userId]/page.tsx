@@ -17,7 +17,8 @@ import { ProfileBackgroundUpload } from "@/components/profile/profile-background
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { SkillManager } from "@/components/skill/skill-manager";
 import { SkillShowcase } from "@/components/skill/skill-showcase";
-import { getViewer } from "@/lib/auth/viewer";
+import { getViewer, getViewerEmail } from "@/lib/auth/viewer";
+import { isPersonaShowcaseEmail } from "@/lib/persona/showcase";
 import type { ProfileFormValues } from "@/lib/profile/action-state";
 import type { PersonaItem } from "@/lib/persona/types";
 import type { ProfileSkillItem } from "@/lib/skill/action-state";
@@ -53,7 +54,7 @@ function formatUpdatedAt(value: string) {
 }
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
-  const [{ userId }, viewer] = await Promise.all([params, getViewer()]);
+  const [{ userId }, viewer, viewerEmail] = await Promise.all([params, getViewer(), getViewerEmail()]);
 
   if (!viewer) {
     throw new Error("无法确认当前用户身份");
@@ -112,6 +113,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const profileBackgroundUrl = backgroundResult?.data?.signedUrl ?? null;
 
   const isOwner = viewer.id === profile.id;
+  const showPersonaShowcase = isOwner && isPersonaShowcaseEmail(viewerEmail);
   const personaIds = (personaRows ?? []).map((persona) => persona.id);
   let entryRows: Array<{
     id: string;
@@ -317,7 +319,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         {isOwner ? <SkillManager items={profileSkills} /> : <SkillShowcase items={profileSkills} />}
       </section>
 
-      <PersonaStudio isOwner={isOwner} personas={personas} viewerId={viewer.id} />
+      <PersonaStudio
+        isOwner={isOwner}
+        personas={personas}
+        showAvatarShowcase={showPersonaShowcase}
+        viewerId={viewer.id}
+      />
     </section>
   );
 }
