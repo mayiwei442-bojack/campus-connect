@@ -17,12 +17,18 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { PersonaAskCard } from "@/components/persona/persona-ask-card";
 import type { PersonaEntryItem, PersonaItem } from "@/lib/persona/types";
 import { createClient } from "@/lib/supabase/client";
+
+const PersonaAvatarShowcase = dynamic(
+  () => import("@/components/persona/persona-avatar-showcase").then((module) => module.PersonaAvatarShowcase),
+  { ssr: false },
+);
 
 const kindLabels: Record<PersonaEntryItem["kind"], string> = {
   fact: "事实",
@@ -39,7 +45,14 @@ const statusLabels: Record<PersonaEntryItem["status"], string> = {
   replaced: "历史版本",
 };
 
-export function PersonaStudio({ isOwner, personas, viewerId }: { isOwner: boolean; personas: PersonaItem[]; viewerId: string }) {
+type PersonaStudioProps = {
+  isOwner: boolean;
+  personas: PersonaItem[];
+  showAvatarShowcase: boolean;
+  viewerId: string;
+};
+
+export function PersonaStudio({ isOwner, personas, showAvatarShowcase, viewerId }: PersonaStudioProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [busyKey, setBusyKey] = useState("");
@@ -207,6 +220,7 @@ export function PersonaStudio({ isOwner, personas, viewerId }: { isOwner: boolea
   return (
     <section className="overflow-hidden rounded-[1.9rem] border border-forest/10 bg-paper-deep/28 p-5 sm:p-7">
       <PersonaHeader count={personas.length} owner />
+      {showAvatarShowcase ? <PersonaAvatarShowcase personas={personas} /> : null}
       <div className="mt-5 min-h-6" aria-live="polite">
         {message ? <p className="flex items-center gap-2 text-sm font-semibold text-forest"><Check size={16} />{message}</p> : null}
         {error ? <p role="alert" className="flex items-center gap-2 text-sm font-semibold text-signal"><CircleOff size={16} />{error}</p> : null}

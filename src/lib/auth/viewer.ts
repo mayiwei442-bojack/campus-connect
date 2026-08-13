@@ -9,12 +9,16 @@ export type Viewer = {
   nickname: string;
 };
 
+type ViewerIdentity = Viewer & {
+  email: string;
+};
+
 function getInitials(nickname: string) {
   const compactName = nickname.replace(/\s+/g, "");
   return Array.from(compactName).slice(0, 2).join("").toUpperCase() || "CC";
 }
 
-export const getViewer = cache(async (): Promise<Viewer | null> => {
+const getViewerIdentity = cache(async (): Promise<ViewerIdentity | null> => {
   if (!isSupabaseConfigured()) {
     return null;
   }
@@ -34,6 +38,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     const nickname = profile?.nickname || email.split("@")[0] || "Campus Member";
 
     return {
+      email,
       id: userId,
       initials: getInitials(nickname),
       nickname,
@@ -41,4 +46,23 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   } catch {
     return null;
   }
+});
+
+export const getViewer = cache(async (): Promise<Viewer | null> => {
+  const identity = await getViewerIdentity();
+
+  if (!identity) {
+    return null;
+  }
+
+  return {
+    id: identity.id,
+    initials: identity.initials,
+    nickname: identity.nickname,
+  };
+});
+
+export const getViewerEmail = cache(async (): Promise<string | null> => {
+  const identity = await getViewerIdentity();
+  return identity?.email || null;
 });
