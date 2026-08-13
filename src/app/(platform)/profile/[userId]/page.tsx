@@ -225,10 +225,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               <span className={isOwner ? "pr-32" : undefined}>{isOwner ? "Owner copy" : "Public copy"}</span>
             </div>
             <div
-              className={`mt-8 grid min-h-24 w-24 place-items-center rounded-[1.7rem] border border-white/18 bg-white/10 px-2 text-center font-display font-semibold leading-[0.9] shadow-[0_18px_50px_rgba(9,31,46,0.22)] ${profileNameBadgeClass(profile.nickname)}`}
+              className={`mt-8 grid min-h-24 w-fit min-w-40 max-w-full place-items-center rounded-[1.7rem] border border-white/18 bg-white/10 px-5 text-center font-display font-semibold shadow-[0_18px_50px_rgba(9,31,46,0.22)] ${profileNameBadgeClass(profile.nickname)}`}
               title={profile.nickname}
             >
-              <span className="max-w-[6ch] break-all">{profile.nickname}</span>
+              <span className="whitespace-nowrap">{profile.nickname}</span>
             </div>
             <div className="relative mt-auto pt-10">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-skyline">Member record</p>
