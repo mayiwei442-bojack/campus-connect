@@ -218,8 +218,9 @@ test.describe.serial("Golden path A", () => {
         .select("queue_position, status")
         .eq("activity_id", activityId)
         .eq("profile_id", reserveProfile!.id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) return null;
       reserveQueuePosition = data.queue_position;
       return data.status;
     }).toBe("waitlisted");
@@ -242,7 +243,7 @@ test.describe.serial("Golden path A", () => {
         .select("status")
         .eq("activity_id", activityId)
         .eq("profile_id", firstWaiterRow!.profile_id)
-        .single();
+        .maybeSingle();
       return data?.status;
     }).toBe("joined");
 
@@ -255,7 +256,7 @@ test.describe.serial("Golden path A", () => {
         .select("status")
         .eq("activity_id", activityId)
         .eq("profile_id", reserveProfile!.id)
-        .single();
+        .maybeSingle();
       return data?.status;
     }).toBe("joined");
 
