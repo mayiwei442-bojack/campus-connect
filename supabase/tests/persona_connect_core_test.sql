@@ -208,6 +208,15 @@ select extensions.ok(
 );
 
 set local request.jwt.claim.sub = '61111111-1111-4111-8111-111111111111';
+insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+values (
+  '66666666-6666-4666-8666-666666666661',
+  'persona-assets',
+  '61111111-1111-4111-8111-111111111111/' || (select value from persona_test_state where key = 'public_persona')::text || '/football.webp',
+  '61111111-1111-4111-8111-111111111111'::uuid,
+  '61111111-1111-4111-8111-111111111111',
+  '{"mimetype":"image/webp","size":2048}'::jsonb
+);
 insert into persona_test_state (key, value)
 values (
   'asset',
@@ -407,7 +416,7 @@ select extensions.is(
       and policyname in (
         'Persona owners can upload their assets',
         'Eligible users can read persona assets',
-        'Persona owners can delete unreferenced assets'
+        'Persona owners can delete orphan assets'
       )
   ),
   3,

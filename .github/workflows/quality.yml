@@ -74,6 +74,8 @@ jobs:
           echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY" >> "$GITHUB_ENV"
       - name: Verify shared Connect rate limit under concurrency
         run: node scripts/test-connect-rate-limit-concurrency.mjs
+      - name: Verify Persona Storage lifecycle through the API
+        run: node scripts/test-persona-storage-lifecycle.mjs
       - name: Stop local Supabase
         if: always()
         run: pnpm exec supabase stop --no-backup
