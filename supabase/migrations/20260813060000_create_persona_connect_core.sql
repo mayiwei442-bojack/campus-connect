@@ -589,7 +589,7 @@ begin
         join public.activities activity on activity.id = participation.activity_id
         where participation.profile_id = candidate.id
           and participation.status = 'joined'
-          and activity.status = 'active'
+          and activity.status in ('scheduled', 'active')
           and activity.starts_at is not null
           and activity.starts_at < p_ends_at
           and coalesce(activity.ends_at, activity.starts_at + interval '2 hours') > p_starts_at
