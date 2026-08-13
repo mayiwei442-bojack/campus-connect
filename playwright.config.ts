@@ -29,6 +29,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
+      DEEPSEEK_API_KEY: "",
       E2E_SUPABASE_SERVICE_ROLE_KEY: "",
       NEXT_PUBLIC_SITE_URL: baseURL,
     },

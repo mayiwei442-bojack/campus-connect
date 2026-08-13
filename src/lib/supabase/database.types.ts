@@ -183,6 +183,42 @@ export type Database = {
           },
         ]
       }
+      blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -305,6 +341,231 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      persona_assets: {
+        Row: {
+          analysis_error: string | null
+          analysis_nonce: string | null
+          analysis_status: Database["public"]["Enums"]["persona_asset_status"]
+          byte_size: number
+          created_at: string
+          id: string
+          is_visible: boolean
+          mime_type: string
+          model_name: string | null
+          owner_id: string
+          persona_id: string
+          storage_path: string
+          updated_at: string
+          user_description: string | null
+        }
+        Insert: {
+          analysis_error?: string | null
+          analysis_nonce?: string | null
+          analysis_status?: Database["public"]["Enums"]["persona_asset_status"]
+          byte_size: number
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          mime_type: string
+          model_name?: string | null
+          owner_id: string
+          persona_id: string
+          storage_path: string
+          updated_at?: string
+          user_description?: string | null
+        }
+        Update: {
+          analysis_error?: string | null
+          analysis_nonce?: string | null
+          analysis_status?: Database["public"]["Enums"]["persona_asset_status"]
+          byte_size?: number
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          mime_type?: string
+          model_name?: string | null
+          owner_id?: string
+          persona_id?: string
+          storage_path?: string
+          updated_at?: string
+          user_description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "persona_assets_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "persona_assets_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "personas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      persona_entries: {
+        Row: {
+          confirmed_at: string | null
+          content: string
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["persona_entry_kind"]
+          knowledge_key: string
+          owner_id: string
+          persona_id: string
+          source_asset_id: string | null
+          status: Database["public"]["Enums"]["persona_entry_status"]
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["persona_entry_kind"]
+          knowledge_key: string
+          owner_id: string
+          persona_id: string
+          source_asset_id?: string | null
+          status?: Database["public"]["Enums"]["persona_entry_status"]
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["persona_entry_kind"]
+          knowledge_key?: string
+          owner_id?: string
+          persona_id?: string
+          source_asset_id?: string | null
+          status?: Database["public"]["Enums"]["persona_entry_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "persona_entries_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "persona_entries_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "personas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "persona_entries_source_asset_id_fkey"
+            columns: ["source_asset_id"]
+            isOneToOne: false
+            referencedRelation: "persona_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      persona_question_topics: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          persona_id: string
+          question_count: number
+          topic_key: string
+          topic_label: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          persona_id: string
+          question_count?: number
+          topic_key: string
+          topic_label: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          persona_id?: string
+          question_count?: number
+          topic_key?: string
+          topic_label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "persona_question_topics_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "persona_question_topics_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: false
+            referencedRelation: "personas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      personas: {
+        Row: {
+          allow_matching: boolean
+          created_at: string
+          id: string
+          is_enabled: boolean
+          name: string
+          owner_id: string
+          slot: number
+          summary: string | null
+          topic: string
+          updated_at: string
+          visibility: Database["public"]["Enums"]["persona_visibility"]
+        }
+        Insert: {
+          allow_matching?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          name: string
+          owner_id: string
+          slot: number
+          summary?: string | null
+          topic: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["persona_visibility"]
+        }
+        Update: {
+          allow_matching?: boolean
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          name?: string
+          owner_id?: string
+          slot?: number
+          summary?: string | null
+          topic?: string
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["persona_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personas_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -486,8 +747,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      begin_persona_asset_analysis: {
+        Args: { p_asset_id: string; p_persona_id: string }
+        Returns: Json
+      }
       can_read_conversation_message: {
         Args: { p_conversation_id: string; p_message_created_at: string }
+        Returns: boolean
+      }
+      can_read_persona_asset: {
+        Args: { p_storage_path: string }
+        Returns: boolean
+      }
+      complete_persona_asset_analysis: {
+        Args: {
+          p_analysis_nonce: string
+          p_asset_id: string
+          p_entries: Json
+          p_model_name: string
+          p_persona_id: string
+        }
+        Returns: undefined
+      }
+      confirm_persona_entry: {
+        Args: { p_entry_id: string }
+        Returns: undefined
+      }
+      consume_connect_rate_limit: { Args: never; Returns: boolean }
+      consume_persona_ai_rate_limit: {
+        Args: { p_scope: string }
         Returns: boolean
       }
       create_activity: {
@@ -506,7 +794,55 @@ export type Database = {
         Args: { p_activity_id: string; p_invitee_id: string }
         Returns: string
       }
+      create_activity_with_invitation: {
+        Args: {
+          p_capacity?: number
+          p_description?: string
+          p_ends_at?: string
+          p_invitee_id: string
+          p_join_mode?: Database["public"]["Enums"]["activity_join_mode"]
+          p_place_id: string
+          p_starts_at?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      create_persona: {
+        Args: {
+          p_name: string
+          p_summary?: string
+          p_topic: string
+          p_visibility?: Database["public"]["Enums"]["persona_visibility"]
+        }
+        Returns: string
+      }
+      delete_persona: { Args: { p_persona_id: string }; Returns: undefined }
       end_activity: { Args: { p_activity_id: string }; Returns: undefined }
+      fail_persona_asset_analysis: {
+        Args: {
+          p_analysis_nonce: string
+          p_asset_id: string
+          p_error: string
+          p_persona_id: string
+        }
+        Returns: undefined
+      }
+      get_connect_candidates: {
+        Args: {
+          p_ends_at?: string
+          p_limit?: number
+          p_starts_at?: string
+          p_terms?: string[]
+        }
+        Returns: {
+          bio: string
+          has_time_conflict: boolean
+          matched_skills: Json
+          nickname: string
+          persona_evidence: Json
+          profile_id: string
+        }[]
+      }
       is_conversation_member: {
         Args: { p_conversation_id: string; p_require_active?: boolean }
         Returns: boolean
@@ -516,10 +852,32 @@ export type Database = {
         Returns: Database["public"]["Enums"]["activity_participation_status"]
       }
       leave_activity: { Args: { p_activity_id: string }; Returns: string }
+      prepare_persona_asset_deletion: {
+        Args: { p_asset_id: string; p_persona_id: string }
+        Returns: string
+      }
       promote_activity_waitlist: {
         Args: { p_activity_id: string }
         Returns: string
       }
+      record_persona_question_topic: {
+        Args: {
+          p_persona_id: string
+          p_topic: Database["public"]["Enums"]["persona_question_topic_kind"]
+        }
+        Returns: undefined
+      }
+      register_persona_asset: {
+        Args: {
+          p_byte_size: number
+          p_mime_type: string
+          p_persona_id: string
+          p_storage_path: string
+          p_user_description?: string
+        }
+        Returns: string
+      }
+      reject_persona_entry: { Args: { p_entry_id: string }; Returns: undefined }
       remove_activity_member: {
         Args: { p_activity_id: string; p_profile_id: string }
         Returns: string
@@ -566,6 +924,24 @@ export type Database = {
       app_role: "user" | "admin"
       conversation_kind: "activity" | "direct"
       message_kind: "text" | "image"
+      persona_asset_status: "uploaded" | "analyzing" | "ready" | "failed"
+      persona_entry_kind:
+        | "fact"
+        | "preference"
+        | "opinion"
+        | "experience"
+        | "boundary"
+      persona_entry_status: "draft" | "confirmed" | "rejected" | "replaced"
+      persona_question_topic_kind:
+        | "background"
+        | "experience"
+        | "preference"
+        | "availability"
+        | "learning"
+        | "collaboration"
+        | "boundary"
+        | "other"
+      persona_visibility: "private" | "public"
       skill_kind: "ability" | "interest"
     }
     CompositeTypes: {
@@ -713,6 +1089,26 @@ export const Constants = {
       app_role: ["user", "admin"],
       conversation_kind: ["activity", "direct"],
       message_kind: ["text", "image"],
+      persona_asset_status: ["uploaded", "analyzing", "ready", "failed"],
+      persona_entry_kind: [
+        "fact",
+        "preference",
+        "opinion",
+        "experience",
+        "boundary",
+      ],
+      persona_entry_status: ["draft", "confirmed", "rejected", "replaced"],
+      persona_question_topic_kind: [
+        "background",
+        "experience",
+        "preference",
+        "availability",
+        "learning",
+        "collaboration",
+        "boundary",
+        "other",
+      ],
+      persona_visibility: ["private", "public"],
       skill_kind: ["ability", "interest"],
     },
   },

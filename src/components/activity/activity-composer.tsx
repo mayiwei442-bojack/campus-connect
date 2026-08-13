@@ -8,7 +8,7 @@ import { createActivityAction, type CreateActivityState } from "@/app/(platform)
 type PlaceOption = { id: string; displayName: string };
 const initialState: CreateActivityState = { message: "", status: "idle" };
 
-export function ActivityComposer({ places, initialPlaceId }: { places: PlaceOption[]; initialPlaceId?: string }) {
+export function ActivityComposer({ places, initialPlaceId, initialTitle, invitee }: { places: PlaceOption[]; initialPlaceId?: string; initialTitle?: string; invitee?: { id: string; nickname: string } | null }) {
   const [state, formAction, pending] = useActionState(createActivityAction, initialState);
   const timezoneOffsetRef = useRef<HTMLInputElement>(null);
 
@@ -19,6 +19,7 @@ export function ActivityComposer({ places, initialPlaceId }: { places: PlaceOpti
   return (
     <form action={formAction} onSubmit={captureTimezone} className="rounded-[1.7rem] border border-forest/10 bg-white/48 p-5 shadow-[0_18px_55px_rgba(20,35,31,0.06)] sm:p-6">
       <input ref={timezoneOffsetRef} type="hidden" name="timezoneOffset" defaultValue="0" />
+      {invitee ? <input type="hidden" name="inviteeId" value={invitee.id} /> : null}
       <div className="flex items-center gap-3">
         <span className="grid size-10 place-items-center rounded-full bg-signal text-white"><Plus size={19} aria-hidden="true" /></span>
         <div>
@@ -27,10 +28,12 @@ export function ActivityComposer({ places, initialPlaceId }: { places: PlaceOpti
         </div>
       </div>
 
+      {invitee ? <p className="mt-5 rounded-xl border border-cobalt/15 bg-cobalt/6 px-4 py-3 text-sm font-semibold text-cobalt">创建成功后会同时向 {invitee.nickname} 发送活动邀请；提交时会再次检查匹配与屏蔽状态。</p> : null}
+
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <label className="sm:col-span-2">
           <span className="text-xs font-bold text-forest/60">活动标题</span>
-          <input name="title" required minLength={2} maxLength={80} placeholder="例如：图书馆两小时产品冲刺" className="mt-2 w-full rounded-xl border border-forest/12 bg-white/70 px-4 py-3 text-sm text-forest" />
+          <input name="title" defaultValue={initialTitle} required minLength={2} maxLength={80} placeholder="例如：图书馆两小时产品冲刺" className="mt-2 w-full rounded-xl border border-forest/12 bg-white/70 px-4 py-3 text-sm text-forest" />
         </label>
         <label>
           <span className="flex items-center gap-2 text-xs font-bold text-forest/60"><MapPin size={14} />地点</span>

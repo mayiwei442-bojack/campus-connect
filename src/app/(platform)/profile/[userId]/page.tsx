@@ -12,11 +12,13 @@ import {
 } from "lucide-react";
 import { notFound } from "next/navigation";
 
+import { PersonaStudio } from "@/components/persona/persona-studio";
 import { ProfileEditor } from "@/components/profile/profile-editor";
 import { SkillManager } from "@/components/skill/skill-manager";
 import { SkillShowcase } from "@/components/skill/skill-showcase";
 import { getViewer } from "@/lib/auth/viewer";
 import type { ProfileFormValues } from "@/lib/profile/action-state";
+import type { PersonaItem } from "@/lib/persona/types";
 import type { ProfileSkillItem } from "@/lib/skill/action-state";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,6 +41,7 @@ function formatUpdatedAt(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
     day: "numeric",
     month: "short",
+    timeZone: "Asia/Shanghai",
     year: "numeric",
   }).format(new Date(value));
 }
@@ -57,7 +60,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const supabase = await createClient();
-  const [{ data: profile, error }, { data: profileSkillRows, error: skillError }] = await Promise.all([
+  const [{ data: profile, error }, { data: profileSkillRows, error: skillError }, { data: personaRows, error: personaError }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -72,6 +75,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       )
       .eq("profile_id", targetUserId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("personas")
+      .select("id,slot,name,topic,summary,visibility,is_enabled,allow_matching")
+      .eq("owner_id", targetUserId)
+      .order("slot", { ascending: true }),
   ]);
 
   if (error) {
@@ -83,8 +91,88 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   if (skillError) {
     throw new Error("Skill 暂时无法读取");
   }
+  if (personaError) {
+    throw new Error("Persona 暂时无法读取");
+  }
 
   const isOwner = viewer.id === profile.id;
+  const personaIds = (personaRows ?? []).map((persona) => persona.id);
+  let entryRows: Array<{
+    id: string;
+    source_asset_id: string | null;
+    kind: PersonaItem["entries"][number]["kind"];
+    knowledge_key: string;
+    content: string;
+    status: PersonaItem["entries"][number]["status"];
+    confirmed_at: string | null;
+    persona_id: string;
+  }> = [];
+  let assetRows: Array<Omit<PersonaItem["assets"][number], "imageUrl"> & { persona_id: string }> = [];
+  let topicRows: Array<PersonaItem["questionTopics"][number] & { persona_id: string }> = [];
+
+  if (personaIds.length) {
+    const entryQuery = supabase
+      .from("persona_entries")
+      .select("id,persona_id,source_asset_id,kind,knowledge_key,content,status,confirmed_at")
+      .in("persona_id", personaIds)
+      .order("created_at", { ascending: true });
+    const [{ data: entries, error: entryError }, assetResult, topicResult] = await Promise.all([
+      isOwner ? entryQuery : entryQuery.eq("status", "confirmed"),
+      isOwner
+        ? supabase
+          .from("persona_assets")
+          .select("id,persona_id,storage_path,mime_type,byte_size,user_description,is_visible,analysis_status,analysis_error,model_name")
+          .in("persona_id", personaIds)
+          .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      isOwner
+        ? supabase
+          .from("persona_question_topics")
+          .select("id,persona_id,topic_key,topic_label,question_count")
+          .in("persona_id", personaIds)
+          .order("question_count", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (entryError || assetResult.error || topicResult.error) throw new Error("Persona 内容暂时无法读取");
+    entryRows = entries ?? [];
+    assetRows = assetResult.data ?? [];
+    topicRows = topicResult.data ?? [];
+  }
+
+  const signedAssets = await Promise.all(assetRows.map(async (asset) => {
+    const { data } = await supabase.storage.from("persona-assets").createSignedUrl(asset.storage_path, 1800);
+    return { ...asset, imageUrl: data?.signedUrl ?? null };
+  }));
+  const personas: PersonaItem[] = (personaRows ?? []).map((persona) => ({
+    ...persona,
+    assets: signedAssets.filter((asset) => asset.persona_id === persona.id).map((asset) => ({
+      id: asset.id,
+      storage_path: asset.storage_path,
+      mime_type: asset.mime_type,
+      byte_size: asset.byte_size,
+      user_description: asset.user_description,
+      is_visible: asset.is_visible,
+      analysis_status: asset.analysis_status,
+      analysis_error: asset.analysis_error,
+      model_name: asset.model_name,
+      imageUrl: asset.imageUrl,
+    })),
+    entries: entryRows.filter((entry) => entry.persona_id === persona.id).map((entry) => ({
+      id: entry.id,
+      source_asset_id: entry.source_asset_id,
+      kind: entry.kind,
+      knowledge_key: entry.knowledge_key,
+      content: entry.content,
+      status: entry.status,
+      confirmed_at: entry.confirmed_at,
+    })),
+    questionTopics: topicRows.filter((topic) => topic.persona_id === persona.id).map((topic) => ({
+      id: topic.id,
+      topic_key: topic.topic_key,
+      topic_label: topic.topic_label,
+      question_count: topic.question_count,
+    })),
+  }));
   const formValues: ProfileFormValues = {
     allowMatching: profile.allow_matching,
     allowStrangerMessages: profile.allow_stranger_messages,
@@ -206,14 +294,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         {isOwner ? <SkillManager items={profileSkills} /> : <SkillShowcase items={profileSkills} />}
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {["共同经历 · 待活动模块", "Persona · 最多 3 个"].map((item, index) => (
-          <div key={item} className="flex items-center gap-3 rounded-[1.2rem] border border-forest/8 bg-white/32 p-4 text-sm font-semibold text-forest/52">
-            <span className="font-mono text-[0.62rem] tracking-[0.14em] text-signal">0{index + 1}</span>
-            {item}
-          </div>
-        ))}
-      </div>
+      <PersonaStudio isOwner={isOwner} personas={personas} viewerId={viewer.id} />
     </section>
   );
 }
