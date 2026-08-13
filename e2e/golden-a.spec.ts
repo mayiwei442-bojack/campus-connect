@@ -46,13 +46,19 @@ async function createLoggedInPage(
   return { context, page };
 }
 
-function createLocalAdminClient() {
+async function createOwnerAssertionClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key || !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url)) {
-    throw new Error("Golden path A database assertions require the isolated local Supabase admin client.");
+    throw new Error("Golden path A database assertions require the isolated local Supabase public client.");
   }
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const client = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { error } = await client.auth.signInWithPassword({
+    email: E2E_USERS.owner.email,
+    password: E2E_USERS.owner.password,
+  });
+  if (error) throw new Error(`Unable to establish the local owner assertion session: ${error.message}`);
+  return client;
 }
 
 function activityIdFromUrl(url: string) {
@@ -156,7 +162,7 @@ test.describe.serial("Golden path A", () => {
     });
 
     const activityId = activityIdFromUrl(freeActivityUrl);
-    const admin = createLocalAdminClient();
+    const ownerAssertions = await createOwnerAssertionClient();
 
     await memberPage.goto(freeActivityUrl);
     await waiterPage.goto(freeActivityUrl);
@@ -166,7 +172,7 @@ test.describe.serial("Golden path A", () => {
     ]);
 
     const contestantNames = [E2E_USERS.member.nickname, E2E_USERS.waiter.nickname];
-    const { data: contestants, error: contestantError } = await admin
+    const { data: contestants, error: contestantError } = await ownerAssertions
       .from("profiles")
       .select("id, nickname")
       .in("nickname", contestantNames);
@@ -176,7 +182,7 @@ test.describe.serial("Golden path A", () => {
 
     let raceRows: { profile_id: string; queue_position: number | null; status: string }[] = [];
     await expect.poll(async () => {
-      const { data, error } = await admin
+      const { data, error } = await ownerAssertions
         .from("activity_participations")
         .select("profile_id, queue_position, status")
         .eq("activity_id", activityId)
@@ -198,7 +204,7 @@ test.describe.serial("Golden path A", () => {
 
     await reservePage.goto(freeActivityUrl);
     await reservePage.getByRole("button", { name: "加入活动" }).click();
-    const { data: reserveProfile, error: reserveProfileError } = await admin
+    const { data: reserveProfile, error: reserveProfileError } = await ownerAssertions
       .from("profiles")
       .select("id")
       .eq("nickname", E2E_USERS.reserve.nickname)
@@ -207,7 +213,7 @@ test.describe.serial("Golden path A", () => {
 
     let reserveQueuePosition: number | null = null;
     await expect.poll(async () => {
-      const { data, error } = await admin
+      const { data, error } = await ownerAssertions
         .from("activity_participations")
         .select("queue_position, status")
         .eq("activity_id", activityId)
@@ -220,7 +226,7 @@ test.describe.serial("Golden path A", () => {
     expect(reserveQueuePosition).not.toBeNull();
     expect(reserveQueuePosition!).toBeGreaterThan(firstWaiterRow!.queue_position!);
 
-    const { count: joinedCount, error: countError } = await admin
+    const { count: joinedCount, error: countError } = await ownerAssertions
       .from("activity_participations")
       .select("*", { count: "exact", head: true })
       .eq("activity_id", activityId)
@@ -231,7 +237,7 @@ test.describe.serial("Golden path A", () => {
     await joinedPage.reload();
     await joinedPage.getByRole("button", { name: "退出活动" }).click();
     await expect.poll(async () => {
-      const { data } = await admin
+      const { data } = await ownerAssertions
         .from("activity_participations")
         .select("status")
         .eq("activity_id", activityId)
@@ -244,7 +250,7 @@ test.describe.serial("Golden path A", () => {
     await expect(firstWaiterPage.getByRole("link", { name: "进入活动群聊" })).toBeVisible();
     await firstWaiterPage.getByRole("button", { name: "退出活动" }).click();
     await expect.poll(async () => {
-      const { data } = await admin
+      const { data } = await ownerAssertions
         .from("activity_participations")
         .select("status")
         .eq("activity_id", activityId)
