@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { DashscopeUnavailableError, requestPersonaImageAnalysis } from "@/lib/ai/dashscope";
+import { MAX_PERSONA_IMAGE_ANALYSIS_BYTES } from "@/lib/persona/assets";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,8 +12,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const maximumBase64SourceBytes = 7 * 1024 * 1024;
-
 function asRecord(value: Json | null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Json | undefined> : null;
 }
@@ -60,12 +59,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pe
     const mimeType = text(asset.mimeType, 80);
     const byteSize = typeof asset.byteSize === "number" ? asset.byteSize : 0;
     if (!storagePath || !["image/jpeg", "image/png", "image/webp"].includes(mimeType)) throw new Error("图片格式不受支持。");
-    if (byteSize < 1 || byteSize > maximumBase64SourceBytes) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。 ");
+    if (byteSize < 1 || byteSize > MAX_PERSONA_IMAGE_ANALYSIS_BYTES) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。");
 
     const { data: blob, error: downloadError } = await supabase.storage.from("persona-assets").download(storagePath);
     if (downloadError || !blob) throw new Error("图片暂时无法读取。");
     const bytes = Buffer.from(await blob.arrayBuffer());
-    if (!bytes.length || bytes.length > maximumBase64SourceBytes) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。");
+    if (!bytes.length || bytes.length > MAX_PERSONA_IMAGE_ANALYSIS_BYTES) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。");
 
     const analysis = await requestPersonaImageAnalysis({
       dataUrl: `data:${mimeType};base64,${bytes.toString("base64")}`,
