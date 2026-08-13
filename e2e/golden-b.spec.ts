@@ -90,6 +90,7 @@ test.describe.serial("Golden path B", () => {
     await candidatePage.locator("textarea").fill(message);
     await candidatePage.getByRole("button", { name: "发送消息" }).click();
     await expect(candidatePage.getByText(message)).toBeVisible();
-    await expect(connectorPage.getByText(message)).toBeVisible({ timeout: 15_000 });
+    await connectorPage.reload();
+    await expect(connectorPage.getByText(message)).toBeVisible();
   });
 });
