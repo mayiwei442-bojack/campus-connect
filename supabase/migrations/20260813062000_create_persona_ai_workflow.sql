@@ -163,6 +163,26 @@ end;
 $$;
 
 drop policy if exists "Persona owners can delete unreferenced assets" on storage.objects;
+
+drop policy if exists "Eligible users can read persona assets" on storage.objects;
+create policy "Eligible users can read persona assets"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'persona-assets'
+  and (
+    public.can_read_persona_asset(name)
+    or (
+      (storage.foldername(name))[1] = (select auth.uid())::text
+      and not exists (
+        select 1 from public.persona_assets
+        where persona_assets.storage_path = name
+      )
+    )
+  )
+);
+
 create policy "Persona owners can delete orphan assets"
 on storage.objects
 for delete

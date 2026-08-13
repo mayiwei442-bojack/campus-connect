@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(29);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -298,15 +298,19 @@ select extensions.is_empty(
   'prepared deletion leaves no dangling public asset metadata'
 );
 
-reset role;
-
 select extensions.is(
   (select count(*)::integer from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid),
   1,
-  'the orphan remains stored for deletion through the owner-authenticated Storage API'
+  'the prepared orphan remains visible only to its owner for deletion through the Storage API'
 );
 
-set local role authenticated;
+set local request.jwt.claim.sub = '82222222-2222-4222-8222-222222222222';
+
+select extensions.is_empty(
+  $$select id from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid$$,
+  'another authenticated user cannot discover an owner orphan'
+);
+
 set local request.jwt.claim.sub = '81111111-1111-4111-8111-111111111111';
 
 select extensions.throws_ok(
