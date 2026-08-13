@@ -728,6 +728,7 @@ export type Database = {
           allow_matching: boolean
           allow_stranger_messages: boolean
           avatar_path: string | null
+          background_path: string | null
           bio: string | null
           campus: string | null
           created_at: string
@@ -742,6 +743,7 @@ export type Database = {
           allow_matching?: boolean
           allow_stranger_messages?: boolean
           avatar_path?: string | null
+          background_path?: string | null
           bio?: string | null
           campus?: string | null
           created_at?: string
@@ -756,6 +758,7 @@ export type Database = {
           allow_matching?: boolean
           allow_stranger_messages?: boolean
           avatar_path?: string | null
+          background_path?: string | null
           bio?: string | null
           campus?: string | null
           created_at?: string
@@ -986,6 +989,10 @@ export type Database = {
           p_mime_type?: string
           p_storage_path?: string
         }
+        Returns: string
+      }
+      set_profile_background: {
+        Args: { p_storage_path: string }
         Returns: string
       }
     }

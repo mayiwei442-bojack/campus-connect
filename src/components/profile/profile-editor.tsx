@@ -26,10 +26,10 @@ export function ProfileEditor({ initialValues }: ProfileEditorProps) {
   return (
     <form action={formAction} className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]" noValidate>
       <fieldset className="rounded-[1.8rem] border border-forest/10 bg-white/52 p-5 shadow-[0_20px_70px_rgba(20,35,31,0.06)] sm:p-7">
-        <legend className="px-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-signal">
+        <legend className="relative top-3 z-10 ml-2 px-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-signal">
           Public identity
         </legend>
-        <div className="mt-1 flex items-start justify-between gap-5 border-b border-forest/8 pb-5">
+        <div className="mt-6 flex items-start justify-between gap-5 border-b border-forest/8 pb-5">
           <div>
             <h2 className="font-display text-2xl font-semibold tracking-[-0.025em] text-forest">编辑校园名片</h2>
             <p className="mt-2 max-w-xl text-sm leading-7 text-forest/52">资料与 AI 模块分开保存，不会等待匹配或 Persona 响应。</p>
@@ -83,10 +83,10 @@ export function ProfileEditor({ initialValues }: ProfileEditorProps) {
       <fieldset className="relative overflow-hidden rounded-[1.8rem] bg-forest p-5 text-paper shadow-[0_24px_80px_rgba(20,60,50,0.18)] sm:p-7">
         <div className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full border border-white/8" />
         <div className="pointer-events-none absolute -right-6 -top-6 size-28 rounded-full border border-white/8" />
-        <legend className="relative px-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-skyline">
+        <legend className="relative top-3 z-10 ml-2 px-2 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-skyline">
           Connection boundaries
         </legend>
-        <div className="relative mt-1">
+        <div className="relative mt-6">
           <div className="flex items-start gap-3 border-b border-white/10 pb-5">
             <ShieldCheck className="mt-0.5 shrink-0 text-skyline" size={21} aria-hidden="true" />
             <div>

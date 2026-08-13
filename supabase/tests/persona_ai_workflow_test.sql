@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(31);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -13,6 +13,12 @@ grant select, insert, update, delete on table persona_ai_state to authenticated;
 create temporary table persona_ai_context (key text primary key, value jsonb not null);
 grant select, insert, update, delete on table persona_ai_context to authenticated;
 
+select extensions.is(
+  (select file_size_limit from storage.buckets where id = 'persona-assets'),
+  52428800::bigint,
+  'the Persona bucket accepts images through 50 MiB'
+);
+
 set local role authenticated;
 set local request.jwt.claim.sub = '81111111-1111-4111-8111-111111111111';
 
@@ -20,6 +26,27 @@ insert into persona_ai_state (key, value)
 values (
   'persona',
   public.create_persona('摄影现场', '校园摄影与构图', '只采纳主人确认过的条目', 'private')
+);
+
+insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
+values (
+  '86666666-6666-4666-8666-666666666660',
+  'persona-assets',
+  '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/large.webp',
+  '81111111-1111-4111-8111-111111111111'::uuid,
+  '81111111-1111-4111-8111-111111111111',
+  '{"mimetype":"image/webp","size":52428800}'::jsonb
+);
+
+select extensions.lives_ok(
+  format(
+    'select public.register_persona_asset(%L::uuid, %L, %L, %s, null)',
+    (select value from persona_ai_state where key = 'persona'),
+    '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/large.webp',
+    'image/webp',
+    52428800
+  ),
+  'asset metadata can be registered at the 50 MiB boundary'
 );
 
 select extensions.throws_ok(
