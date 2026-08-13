@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { PersonaAskCard } from "@/components/persona/persona-ask-card";
+import type { PersonaAvatarModelConfig, PersonaAvatarSlot } from "@/components/persona/persona-avatar-stage";
 import {
   personaImageExtension,
   validatePersonaImage,
@@ -33,6 +34,27 @@ const PersonaAvatarShowcase = dynamic(
   () => import("@/components/persona/persona-avatar-showcase").then((module) => module.PersonaAvatarShowcase),
   { ssr: false },
 );
+
+const PersonaAvatarManager = dynamic(
+  () => import("@/components/persona/persona-avatar-manager").then((module) => module.PersonaAvatarManager),
+  { ssr: false },
+);
+
+const personaAvatarAccents = ["#f4d7a2", "#ef694c", "#63b7e6"] as const;
+
+function uploadedAvatarModels(personas: PersonaItem[]) {
+  return personas.flatMap((persona) => {
+    if (!persona.avatarModel?.modelUrl) return [];
+    return [{
+      accent: personaAvatarAccents[persona.slot - 1] ?? personaAvatarAccents[0],
+      displayScale: 1,
+      label: persona.avatarModel.original_filename,
+      modelUrl: persona.avatarModel.modelUrl,
+      slot: persona.slot as PersonaAvatarSlot,
+      verticalOffset: 0,
+    } satisfies PersonaAvatarModelConfig];
+  });
+}
 
 const kindLabels: Record<PersonaEntryItem["kind"], string> = {
   fact: "事实",
@@ -52,11 +74,11 @@ const statusLabels: Record<PersonaEntryItem["status"], string> = {
 type PersonaStudioProps = {
   isOwner: boolean;
   personas: PersonaItem[];
-  showAvatarShowcase: boolean;
+  showLocalRoadshow: boolean;
   viewerId: string;
 };
 
-export function PersonaStudio({ isOwner, personas, showAvatarShowcase, viewerId }: PersonaStudioProps) {
+export function PersonaStudio({ isOwner, personas, showLocalRoadshow, viewerId }: PersonaStudioProps) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [busyKey, setBusyKey] = useState("");
@@ -227,15 +249,24 @@ export function PersonaStudio({ isOwner, personas, showAvatarShowcase, viewerId 
     }
     begin(`delete:${persona.id}`);
     const { error: deleteError } = await supabase.rpc("delete_persona", { p_persona_id: persona.id });
-    if (deleteError) return fail(new Error(deleteError.message.includes("PERSONA_HAS_ASSETS") ? "请先移除所有未被已确认知识引用的图片；如需删除来源图，请先删除对应知识。" : "Persona 删除失败。"), "Persona 删除失败。");
+    if (deleteError) {
+      const deletionMessage = deleteError.message.includes("PERSONA_HAS_AVATAR_MODEL")
+        ? "请先移除这个 Persona 的 3D 形象。"
+        : deleteError.message.includes("PERSONA_HAS_ASSETS")
+          ? "请先移除所有未被已确认知识引用的图片；如需删除来源图，请先删除对应知识。"
+          : "Persona 删除失败。";
+      return fail(new Error(deletionMessage), "Persona 删除失败。");
+    }
     setDeleteConfirm("");
     finish("Persona 已删除。");
   }
 
   if (!isOwner) {
+    const models = uploadedAvatarModels(personas);
     return (
       <section className="overflow-hidden rounded-[1.9rem] border border-forest/10 bg-paper-deep/28 p-5 sm:p-7">
         <PersonaHeader count={personas.length} owner={false} />
+        {models.length ? <PersonaAvatarShowcase models={models} personas={personas} /> : null}
         {personas.length ? <div className="mt-6 grid gap-5 xl:grid-cols-2">{personas.map((persona) => <PublicPersona key={persona.id} persona={persona} />)}</div> : <EmptyPersona owner={false} />}
       </section>
     );
@@ -244,7 +275,9 @@ export function PersonaStudio({ isOwner, personas, showAvatarShowcase, viewerId 
   return (
     <section className="overflow-hidden rounded-[1.9rem] border border-forest/10 bg-paper-deep/28 p-5 sm:p-7">
       <PersonaHeader count={personas.length} owner />
-      {showAvatarShowcase ? <PersonaAvatarShowcase personas={personas} /> : null}
+      {showLocalRoadshow
+        ? <PersonaAvatarShowcase personas={personas} roadshow />
+        : <PersonaAvatarManager personas={personas} viewerId={viewerId} />}
       <div className="mt-5 min-h-6" aria-live="polite">
         {message ? <p className="flex items-center gap-2 text-sm font-semibold text-forest"><Check size={16} />{message}</p> : null}
         {error ? <p role="alert" className="flex items-center gap-2 text-sm font-semibold text-signal"><CircleOff size={16} />{error}</p> : null}

@@ -55,7 +55,7 @@ Home/Connect
 - no background location
 - no school official-system integration
 - no full payment system
-- no custom Avatar system in MVP
+- no global account-avatar builder in MVP; a Persona may optionally display one owner-uploaded GLB 2.0 visualization
 - demo may contain many seeded virtual users
 - real classmates may still register
 - first version is both the competition/demo version and the initial public deployment version
@@ -656,6 +656,13 @@ Current desired inputs:
 - text
 - images
 
+Optional visualization:
+
+- one owner-uploaded GLB 2.0 model per Persona
+- the GLB is presentation only and must not become Persona knowledge or AI evidence
+- model visibility follows the Persona's existing public/enabled controls
+- public deployments must not expose local roadshow-only built-in models
+
 Do not assume arbitrary PDF/file training or fine-tuning.
 
 If the chosen DeepSeek model/interface does not support image understanding in the implementation environment, store image assets and accompanying user-provided text/metadata rather than inventing visual interpretation.
@@ -829,6 +836,7 @@ Likely buckets:
 - avatars
 - chat-images
 - persona-assets
+- persona-models
 - review-images if enabled
 
 Private media must not be made globally public for convenience.
@@ -1192,7 +1200,7 @@ Do not add unless requested:
 - background tracking
 - native app
 - school SSO
-- custom avatars
+- global account-avatar builder (Persona-scoped GLB visualization remains allowed)
 - AI reading private chats
 - AI-to-AI socializing in place of users
 - custom WebSocket infrastructure
