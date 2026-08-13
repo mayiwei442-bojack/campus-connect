@@ -137,7 +137,7 @@ test.describe.serial("Golden path A", () => {
 
     await memberPage.goto(approvalActivityUrl);
     await memberPage.getByRole("link", { name: E2E_USERS.owner.nickname }).click();
-    await expect(memberPage.getByRole("heading", { name: E2E_USERS.owner.nickname })).toBeVisible();
+    await expect(memberPage.getByRole("heading", { name: E2E_USERS.owner.nickname, exact: true })).toBeVisible();
     await expect(memberPage.getByText(/公开 Skill/)).toBeVisible();
 
     await ownerPage.goto(approvalActivityUrl);
