@@ -72,6 +72,8 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLIC_KEY" >> "$GITHUB_ENV"
           echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY" >> "$GITHUB_ENV"
+      - name: Verify demo seed Auth and RLS visibility
+        run: node scripts/test-demo-seed-auth.mjs
       - name: Verify shared Connect rate limit under concurrency
         run: node scripts/test-connect-rate-limit-concurrency.mjs
       - name: Verify Persona Storage lifecycle through the API

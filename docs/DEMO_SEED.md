@@ -28,6 +28,7 @@ These credentials are intentionally shared demo credentials. Never load this see
 pnpm supabase:start
 pnpm supabase:reset
 pnpm exec supabase test db --local supabase/tests
+node scripts/test-demo-seed-auth.mjs
 ```
 
 The CLI runs `supabase/seed.sql` after migrations because `db.seed.enabled` is true and `db.seed.sql_paths` contains `./seed.sql`.

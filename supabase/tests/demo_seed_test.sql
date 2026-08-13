@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(19);
 
 select extensions.is(
   (select count(*)::integer from auth.users where id::text like '20000000-0000-4000-8000-%'),
@@ -14,6 +14,20 @@ select extensions.is(
   (select count(*)::integer from auth.identities where user_id::text like '20000000-0000-4000-8000-%' and provider = 'email'),
   36,
   'every demo user has an email identity'
+);
+
+select extensions.is(
+  (
+    select count(*)::integer
+    from auth.users
+    where id::text like '20000000-0000-4000-8000-%'
+      and confirmation_token is not null
+      and recovery_token is not null
+      and email_change_token_new is not null
+      and email_change is not null
+  ),
+  36,
+  'demo auth rows satisfy hosted Auth token field requirements'
 );
 
 select extensions.is(
