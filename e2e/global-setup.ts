@@ -63,12 +63,26 @@ export default async function globalSetup() {
     .eq("id", candidateId);
   if (profileError) throw new Error(`Unable to seed the Golden path B profile: ${profileError.message}`);
 
-  const { data: skill, error: skillError } = await candidate
+  const { data: existingSkill, error: skillLookupError } = await candidate
     .from("skills")
-    .insert({ created_by: candidateId, kind: "ability", name: "产品设计" })
     .select("id")
-    .single();
-  if (skillError || !skill) throw new Error(`Unable to seed the Golden path B Skill: ${skillError?.message}`);
+    .eq("kind", "ability")
+    .eq("normalized_name", "产品设计")
+    .maybeSingle();
+  if (skillLookupError) throw new Error(`Unable to find the Golden path B Skill: ${skillLookupError.message}`);
+
+  let skill = existingSkill;
+  if (!skill) {
+    const { data: createdSkill, error: skillCreateError } = await candidate
+      .from("skills")
+      .insert({ created_by: candidateId, kind: "ability", name: "产品设计" })
+      .select("id")
+      .single();
+    if (skillCreateError || !createdSkill) {
+      throw new Error(`Unable to create the Golden path B Skill: ${skillCreateError?.message}`);
+    }
+    skill = createdSkill;
+  }
 
   const { error: profileSkillError } = await candidate.from("profile_skills").insert({
     allow_contact: true,
