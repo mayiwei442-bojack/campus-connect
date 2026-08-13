@@ -10,19 +10,6 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const rateWindows = new Map<string, number[]>();
-const windowMs = 60_000;
-const maxRequestsPerMinute = 8;
-
-function checkRateLimit(userId: string) {
-  const now = Date.now();
-  const current = (rateWindows.get(userId) ?? []).filter((timestamp) => now - timestamp < windowMs);
-  if (current.length >= maxRequestsPerMinute) return false;
-  current.push(now);
-  rateWindows.set(userId, current);
-  return true;
-}
-
 function asRecords(value: Json): Record<string, unknown>[] {
   if (!Array.isArray(value)) return [];
   const records: Record<string, unknown>[] = [];
@@ -134,7 +121,9 @@ export async function POST(request: NextRequest) {
     const { data } = await supabase.auth.getClaims();
     const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
     if (!userId) return NextResponse.json({ error: "请先登录。" }, { status: 401 });
-    if (!checkRateLimit(userId)) return NextResponse.json({ error: "请求过于频繁，请稍后再试。" }, { status: 429 });
+    const { data: withinRateLimit, error: rateLimitError } = await supabase.rpc("consume_connect_rate_limit");
+    if (rateLimitError) throw new Error("推荐服务限流检查失败。");
+    if (!withinRateLimit) return NextResponse.json({ error: "请求过于频繁，请稍后再试。" }, { status: 429 });
 
     const source = parseRecommendationInput(await request.json());
     let parsedByModel = true;

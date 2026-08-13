@@ -756,6 +756,7 @@ export type Database = {
         Args: { p_entry_id: string }
         Returns: undefined
       }
+      consume_connect_rate_limit: { Args: never; Returns: boolean }
       create_activity: {
         Args: {
           p_capacity?: number
