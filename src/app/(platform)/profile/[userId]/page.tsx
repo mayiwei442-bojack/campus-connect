@@ -17,7 +17,7 @@ import { ProfileEditor } from "@/components/profile/profile-editor";
 import { SkillManager } from "@/components/skill/skill-manager";
 import { SkillShowcase } from "@/components/skill/skill-showcase";
 import { getViewer, getViewerEmail } from "@/lib/auth/viewer";
-import { isPersonaShowcaseEmail } from "@/lib/persona/showcase";
+import { shouldShowLocalPersonaRoadshow } from "@/lib/persona/showcase";
 import type { ProfileFormValues } from "@/lib/profile/action-state";
 import type { PersonaItem } from "@/lib/persona/types";
 import type { ProfileSkillItem } from "@/lib/skill/action-state";
@@ -97,7 +97,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   }
 
   const isOwner = viewer.id === profile.id;
-  const showPersonaShowcase = isOwner && isPersonaShowcaseEmail(viewerEmail);
+  const showLocalRoadshow = isOwner && shouldShowLocalPersonaRoadshow(viewerEmail);
   const personaIds = (personaRows ?? []).map((persona) => persona.id);
   let entryRows: Array<{
     id: string;
@@ -110,6 +110,15 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     persona_id: string;
   }> = [];
   let assetRows: Array<Omit<PersonaItem["assets"][number], "imageUrl"> & { persona_id: string }> = [];
+  let avatarRows: Array<{
+    byte_size: number;
+    id: string;
+    mime_type: string;
+    original_filename: string;
+    persona_id: string;
+    storage_path: string;
+    updated_at: string;
+  }> = [];
   let topicRows: Array<PersonaItem["questionTopics"][number] & { persona_id: string }> = [];
 
   if (personaIds.length) {
@@ -118,7 +127,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .select("id,persona_id,source_asset_id,kind,knowledge_key,content,status,confirmed_at")
       .in("persona_id", personaIds)
       .order("created_at", { ascending: true });
-    const [{ data: entries, error: entryError }, assetResult, topicResult] = await Promise.all([
+    const [{ data: entries, error: entryError }, assetResult, avatarResult, topicResult] = await Promise.all([
       isOwner ? entryQuery : entryQuery.eq("status", "confirmed"),
       isOwner
         ? supabase
@@ -127,6 +136,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           .in("persona_id", personaIds)
           .order("created_at", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("persona_avatar_models")
+        .select("id,persona_id,storage_path,original_filename,mime_type,byte_size,updated_at")
+        .in("persona_id", personaIds),
       isOwner
         ? supabase
           .from("persona_question_topics")
@@ -135,16 +148,23 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           .order("question_count", { ascending: false })
         : Promise.resolve({ data: [], error: null }),
     ]);
-    if (entryError || assetResult.error || topicResult.error) throw new Error("Persona 内容暂时无法读取");
+    if (entryError || assetResult.error || avatarResult.error || topicResult.error) throw new Error("Persona 内容暂时无法读取");
     entryRows = entries ?? [];
     assetRows = assetResult.data ?? [];
+    avatarRows = avatarResult.data ?? [];
     topicRows = topicResult.data ?? [];
   }
 
-  const signedAssets = await Promise.all(assetRows.map(async (asset) => {
-    const { data } = await supabase.storage.from("persona-assets").createSignedUrl(asset.storage_path, 1800);
-    return { ...asset, imageUrl: data?.signedUrl ?? null };
-  }));
+  const [signedAssets, signedAvatarModels] = await Promise.all([
+    Promise.all(assetRows.map(async (asset) => {
+      const { data } = await supabase.storage.from("persona-assets").createSignedUrl(asset.storage_path, 1800);
+      return { ...asset, imageUrl: data?.signedUrl ?? null };
+    })),
+    Promise.all(avatarRows.map(async (avatarModel) => {
+      const { data } = await supabase.storage.from("persona-models").createSignedUrl(avatarModel.storage_path, 1800);
+      return { ...avatarModel, modelUrl: data?.signedUrl ?? null };
+    })),
+  ]);
   const personas: PersonaItem[] = (personaRows ?? []).map((persona) => ({
     ...persona,
     assets: signedAssets.filter((asset) => asset.persona_id === persona.id).map((asset) => ({
@@ -159,6 +179,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       model_name: asset.model_name,
       imageUrl: asset.imageUrl,
     })),
+    avatarModel: signedAvatarModels.find((avatarModel) => avatarModel.persona_id === persona.id) ?? null,
     entries: entryRows.filter((entry) => entry.persona_id === persona.id).map((entry) => ({
       id: entry.id,
       source_asset_id: entry.source_asset_id,
@@ -299,7 +320,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       <PersonaStudio
         isOwner={isOwner}
         personas={personas}
-        showAvatarShowcase={showPersonaShowcase}
+        showLocalRoadshow={showLocalRoadshow}
         viewerId={viewer.id}
       />
     </section>

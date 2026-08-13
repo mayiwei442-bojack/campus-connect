@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import type { PersonaAvatarModelConfig, PersonaAvatarSlot } from "@/components/persona/persona-avatar-stage";
 
-const AVATAR_MODELS: PersonaAvatarModelConfig[] = [
+export const LOCAL_ROADSHOW_AVATAR_MODELS: PersonaAvatarModelConfig[] = [
   {
     accent: "#f4d7a2",
     displayScale: 1,
@@ -49,17 +49,26 @@ const PersonaAvatarStage = dynamic(
 );
 
 type PersonaAvatarShowcaseProps = {
+  models?: PersonaAvatarModelConfig[];
   personas: Array<{
     name: string;
     slot: number;
     topic: string;
   }>;
+  roadshow?: boolean;
 };
 
-export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) {
-  const [activeSlot, setActiveSlot] = useState<PersonaAvatarSlot>(1);
-  const activeModel = AVATAR_MODELS.find((model) => model.slot === activeSlot) ?? AVATAR_MODELS[0];
-  const activePersona = personas.find((persona) => persona.slot === activeSlot);
+export function PersonaAvatarShowcase({
+  models = LOCAL_ROADSHOW_AVATAR_MODELS,
+  personas,
+  roadshow = false,
+}: PersonaAvatarShowcaseProps) {
+  const [activeSlot, setActiveSlot] = useState<PersonaAvatarSlot>(models[0]?.slot ?? 1);
+  const activeModel = models.find((model) => model.slot === activeSlot) ?? models[0];
+
+  if (!activeModel) return null;
+
+  const activePersona = personas.find((persona) => persona.slot === activeModel.slot);
 
   return (
     <section className="mt-6 overflow-hidden rounded-[1.65rem] border border-white/10 bg-[#071923] text-white shadow-[0_26px_80px_rgba(7,25,35,0.2)]">
@@ -84,15 +93,15 @@ export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) 
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.62rem] font-bold text-[#071923]" style={{ backgroundColor: activeModel.accent }}>
-                <Sparkles size={12} aria-hidden="true" /> Persona 0{activeSlot}
+                <Sparkles size={12} aria-hidden="true" /> Persona 0{activeModel.slot}
               </span>
               <span className="inline-flex items-center gap-1.5 text-[0.62rem] font-semibold text-white/38">
-                <LockKeyhole size={12} aria-hidden="true" /> 仅路演账号可见
+                <LockKeyhole size={12} aria-hidden="true" /> {roadshow ? "仅本地路演账号可见" : "由用户上传"}
               </span>
             </div>
             <p className="mt-7 font-mono text-[0.58rem] uppercase tracking-[0.22em] text-white/32">Selected identity</p>
             <h3 className="mt-2 font-display text-3xl font-semibold tracking-[-0.04em] text-white">
-              {activePersona?.name ?? `Persona 0${activeSlot}`}
+              {activePersona?.name ?? `Persona 0${activeModel.slot}`}
             </h3>
             <p className="mt-2 text-sm leading-6 text-white/48">
               {activePersona?.topic ?? "等待与一个 Persona 槽位建立连接"}
@@ -103,9 +112,9 @@ export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) 
           </div>
 
           <div className="mt-7 grid grid-cols-3 gap-2 lg:mt-auto lg:grid-cols-1">
-            {AVATAR_MODELS.map((model) => {
+            {models.map((model) => {
               const persona = personas.find((item) => item.slot === model.slot);
-              const selected = model.slot === activeSlot;
+              const selected = model.slot === activeModel.slot;
               return (
                 <button
                   key={model.slot}
