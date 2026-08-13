@@ -61,3 +61,52 @@ jobs:
       - name: Stop local Supabase
         if: always()
         run: pnpm exec supabase stop --no-backup
+
+  golden-path-a:
+    name: Golden path A browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      E2E_APP_PORT: "3100"
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec supabase start
+      - run: pnpm exec supabase db reset --local
+      - name: Export local Supabase environment
+        shell: bash
+        run: |
+          pnpm exec supabase status -o env > .supabase-status.env
+          set -a
+          source .supabase-status.env
+          set +a
+          PUBLIC_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}"
+          ADMIN_KEY="${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+          echo "::add-mask::$PUBLIC_KEY"
+          echo "::add-mask::$ADMIN_KEY"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$PUBLIC_KEY" >> "$GITHUB_ENV"
+          echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY" >> "$GITHUB_ENV"
+      - run: pnpm test:e2e:ci
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-a-browser-diagnostics
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stop local Supabase
+        if: always()
+        run: pnpm exec supabase stop --no-backup
