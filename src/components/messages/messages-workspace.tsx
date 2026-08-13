@@ -70,8 +70,19 @@ export function MessagesWorkspace({ conversations, initialConversationId, initia
     const normalized = body.trim();
     if (!activeId || !normalized || busy || activeConversation?.is_archived) return;
     setBusy(true); setError("");
-    const { error: sendError } = await supabase.rpc("send_message", { p_conversation_id: activeId, p_kind: "text", p_body: normalized, p_client_nonce: crypto.randomUUID() });
-    if (sendError) setError("消息发送失败，请确认你仍是活动成员。"); else setBody("");
+    const { data: messageId, error: sendError } = await supabase.rpc("send_message", { p_conversation_id: activeId, p_kind: "text", p_body: normalized, p_client_nonce: crypto.randomUUID() });
+    if (sendError || !messageId) {
+      setError("消息发送失败，请确认你仍是活动成员。");
+    } else {
+      setBody("");
+      const { data: sentMessage, error: sentMessageError } = await supabase.from("messages").select("*").eq("id", messageId).single();
+      if (sentMessageError) {
+        setError("消息已发送，但页面同步失败，请刷新后查看。");
+      } else {
+        const hydrated = await hydrateMessage(sentMessage);
+        setMessages((current) => activeIdRef.current !== hydrated.conversation_id || current.some((item) => item.id === hydrated.id) ? current : [...current, hydrated]);
+      }
+    }
     setBusy(false);
   }
 
