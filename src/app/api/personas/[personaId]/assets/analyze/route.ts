@@ -3,13 +3,17 @@ import { Buffer } from "node:buffer";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { DashscopeUnavailableError, requestPersonaImageAnalysis } from "@/lib/ai/dashscope";
-import { MAX_PERSONA_IMAGE_ANALYSIS_BYTES } from "@/lib/persona/assets";
+import { MAX_PERSONA_IMAGE_BYTES } from "@/lib/persona/assets";
+import {
+  PersonaImageCompressionError,
+  preparePersonaImageForAnalysis,
+} from "@/lib/persona/image-compression";
 import type { Json } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function asRecord(value: Json | null) {
@@ -59,15 +63,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pe
     const mimeType = text(asset.mimeType, 80);
     const byteSize = typeof asset.byteSize === "number" ? asset.byteSize : 0;
     if (!storagePath || !["image/jpeg", "image/png", "image/webp"].includes(mimeType)) throw new Error("图片格式不受支持。");
-    if (byteSize < 1 || byteSize > MAX_PERSONA_IMAGE_ANALYSIS_BYTES) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。");
+    if (byteSize < 1 || byteSize > MAX_PERSONA_IMAGE_BYTES) throw new Error("图片大小无效。");
 
     const { data: blob, error: downloadError } = await supabase.storage.from("persona-assets").download(storagePath);
     if (downloadError || !blob) throw new Error("图片暂时无法读取。");
     const bytes = Buffer.from(await blob.arrayBuffer());
-    if (!bytes.length || bytes.length > MAX_PERSONA_IMAGE_ANALYSIS_BYTES) throw new Error("图片需小于 7 MB 才能自动理解；图片本身仍已安全保存。");
+    if (!bytes.length || bytes.length > MAX_PERSONA_IMAGE_BYTES || bytes.length !== byteSize) throw new Error("图片大小无效。");
+    const preparedImage = await preparePersonaImageForAnalysis(bytes, mimeType);
 
     const analysis = await requestPersonaImageAnalysis({
-      dataUrl: `data:${mimeType};base64,${bytes.toString("base64")}`,
+      dataUrl: `data:${preparedImage.mimeType};base64,${preparedImage.bytes.toString("base64")}`,
       personaName: text(asset.personaName, 40) || "未命名 Persona",
       personaTopic: text(asset.personaTopic, 80) || "校园经历",
       userDescription: text(asset.userDescription, 500) || null,
@@ -82,7 +87,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pe
     if (completeError) throw new Error("分析草稿暂时无法保存。");
     analysisStarted = false;
 
-    return NextResponse.json({ entryCount: analysis.entries.length, model: analysis.model, status: "ready" });
+    return NextResponse.json({
+      compressed: preparedImage.compressed,
+      entryCount: analysis.entries.length,
+      model: analysis.model,
+      status: "ready",
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "图片理解暂时不可用。";
     if (analysisStarted && assetId && UUID_PATTERN.test(analysisNonce)) {
@@ -93,7 +103,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pe
         p_error: message,
       });
     }
-    const isInputError = /格式|7 MB|无效/.test(message);
+    const isInputError = error instanceof PersonaImageCompressionError || /格式|无效/.test(message);
     return NextResponse.json(
       { error: error instanceof DashscopeUnavailableError ? message : isInputError ? message : "图片理解暂时不可用，图片和人工录入仍可继续使用。" },
       { status: isInputError ? 400 : 503 },
