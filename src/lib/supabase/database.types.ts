@@ -296,6 +296,67 @@ export type Database = {
           },
         ]
       }
+      friendships: {
+        Row: {
+          addressee_id: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          introduction: string
+          requested_at: string
+          requester_id: string
+          responded_at: string | null
+          status: Database["public"]["Enums"]["friendship_status"]
+          updated_at: string
+        }
+        Insert: {
+          addressee_id: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          introduction: string
+          requested_at?: string
+          requester_id: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["friendship_status"]
+          updated_at?: string
+        }
+        Update: {
+          addressee_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          introduction?: string
+          requested_at?: string
+          requester_id?: string
+          responded_at?: string | null
+          status?: Database["public"]["Enums"]["friendship_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_addressee_id_fkey"
+            columns: ["addressee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: true
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string | null
@@ -894,6 +955,28 @@ export type Database = {
         }
         Returns: Database["public"]["Enums"]["activity_participation_status"]
       }
+      respond_friend_request: {
+        Args: { p_accept: boolean; p_friendship_id: string }
+        Returns: string
+      }
+      search_people: {
+        Args: { p_query: string }
+        Returns: {
+          bio: string | null
+          campus: string | null
+          conversation_id: string | null
+          email_hint: string | null
+          friendship_id: string | null
+          friendship_status: Database["public"]["Enums"]["friendship_status"] | null
+          nickname: string
+          profile_id: string
+          requested_by: string | null
+        }[]
+      }
+      send_friend_request: {
+        Args: { p_addressee_id: string; p_introduction: string }
+        Returns: string
+      }
       send_message: {
         Args: {
           p_body?: string
@@ -923,6 +1006,7 @@ export type Database = {
       activity_status: "scheduled" | "active" | "ended" | "disabled"
       app_role: "user" | "admin"
       conversation_kind: "activity" | "direct"
+      friendship_status: "pending" | "accepted" | "declined" | "cancelled"
       message_kind: "text" | "image"
       persona_asset_status: "uploaded" | "analyzing" | "ready" | "failed"
       persona_entry_kind:
@@ -1088,6 +1172,7 @@ export const Constants = {
       activity_status: ["scheduled", "active", "ended", "disabled"],
       app_role: ["user", "admin"],
       conversation_kind: ["activity", "direct"],
+      friendship_status: ["pending", "accepted", "declined", "cancelled"],
       message_kind: ["text", "image"],
       persona_asset_status: ["uploaded", "analyzing", "ready", "failed"],
       persona_entry_kind: [
