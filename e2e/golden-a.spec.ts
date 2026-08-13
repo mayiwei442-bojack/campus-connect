@@ -110,8 +110,8 @@ test.describe.serial("Golden path A", () => {
     await expect(memberPage).toHaveURL(/\/map$/);
     await expect(memberPage.getByText("73 组节点已配对")).toBeVisible({ timeout: 30_000 });
     await memberPage.locator('input[placeholder*="library"]').fill(PLACE_ID);
-    await memberPage.getByRole("button", { name: /Library.*PLACE_library/i }).click();
-    await expect(memberPage.getByText("ANCHOR_library")).toBeVisible();
+    await memberPage.getByRole("button", { name: new RegExp(`${PLACE_LABEL}.*PLACE_${PLACE_ID}`, "i") }).click();
+    await expect(memberPage.getByText(`ANCHOR_${PLACE_ID}`)).toBeVisible();
     await memberPage.getByRole("link", { name: title }).click();
     await expect(memberPage).toHaveURL(new RegExp(`${new URL(approvalActivityUrl).pathname}$`));
     await memberPage.getByRole("button", { name: "申请加入" }).click();
