@@ -110,10 +110,10 @@ export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) 
                 <button
                   key={model.slot}
                   type="button"
-                  aria-label={`查看 Persona 0${model.slot} 的${model.label}`}
+                  aria-label={`查看 ${persona?.name ?? `Persona 0${model.slot}`}`}
                   aria-pressed={selected}
                   onClick={() => setActiveSlot(model.slot)}
-                  className="group flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition duration-300 hover:-translate-y-0.5 lg:px-4"
+                  className="group flex min-w-0 flex-col items-start gap-2 rounded-xl border px-2 py-3 text-left transition duration-300 hover:-translate-y-0.5 sm:flex-row sm:items-center sm:gap-3 sm:px-3 lg:px-4"
                   style={{
                     backgroundColor: selected ? `${model.accent}16` : "rgba(255,255,255,0.025)",
                     borderColor: selected ? `${model.accent}72` : "rgba(255,255,255,0.08)",
@@ -122,9 +122,9 @@ export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) 
                   <span className="grid size-8 shrink-0 place-items-center rounded-lg font-mono text-[0.65rem] font-bold text-[#071923]" style={{ backgroundColor: model.accent }}>
                     0{model.slot}
                   </span>
-                  <span className="hidden min-w-0 lg:block">
-                    <span className="block truncate text-xs font-bold text-white/82">{persona?.name ?? `Persona 0${model.slot}`}</span>
-                    <span className="mt-0.5 block truncate text-[0.62rem] text-white/34">{model.label}</span>
+                  <span className="block min-w-0 max-w-full flex-1">
+                    <span className="block truncate text-[0.68rem] font-bold text-white/82 sm:text-xs">{persona?.name ?? `Persona 0${model.slot}`}</span>
+                    <span className="mt-0.5 hidden truncate text-[0.62rem] text-white/34 lg:block">{model.label}</span>
                   </span>
                 </button>
               );
