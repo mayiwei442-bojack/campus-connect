@@ -350,6 +350,7 @@ export type Database = {
       persona_assets: {
         Row: {
           analysis_error: string | null
+          analysis_nonce: string | null
           analysis_status: Database["public"]["Enums"]["persona_asset_status"]
           byte_size: number
           created_at: string
@@ -365,6 +366,7 @@ export type Database = {
         }
         Insert: {
           analysis_error?: string | null
+          analysis_nonce?: string | null
           analysis_status?: Database["public"]["Enums"]["persona_asset_status"]
           byte_size: number
           created_at?: string
@@ -380,6 +382,7 @@ export type Database = {
         }
         Update: {
           analysis_error?: string | null
+          analysis_nonce?: string | null
           analysis_status?: Database["public"]["Enums"]["persona_asset_status"]
           byte_size?: number
           created_at?: string
@@ -744,6 +747,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      begin_persona_asset_analysis: {
+        Args: { p_asset_id: string; p_persona_id: string }
+        Returns: Json
+      }
       can_read_conversation_message: {
         Args: { p_conversation_id: string; p_message_created_at: string }
         Returns: boolean
@@ -756,7 +763,21 @@ export type Database = {
         Args: { p_entry_id: string }
         Returns: undefined
       }
+      complete_persona_asset_analysis: {
+        Args: {
+          p_asset_id: string
+          p_analysis_nonce: string
+          p_entries: Json
+          p_model_name: string
+          p_persona_id: string
+        }
+        Returns: undefined
+      }
       consume_connect_rate_limit: { Args: never; Returns: boolean }
+      consume_persona_ai_rate_limit: {
+        Args: { p_scope: string }
+        Returns: boolean
+      }
       create_activity: {
         Args: {
           p_capacity?: number
@@ -796,6 +817,10 @@ export type Database = {
         Returns: string
       }
       end_activity: { Args: { p_activity_id: string }; Returns: undefined }
+      fail_persona_asset_analysis: {
+        Args: { p_analysis_nonce: string; p_asset_id: string; p_error: string; p_persona_id: string }
+        Returns: undefined
+      }
       get_connect_candidates: {
         Args: {
           p_ends_at?: string

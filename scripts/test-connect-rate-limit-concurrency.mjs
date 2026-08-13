@@ -50,3 +50,17 @@ if (allowed !== 8 || rejected !== 1) {
 }
 
 console.log("Connect shared rate limiter: 8 allowed, 1 rejected under concurrent load.");
+
+const personaResults = await Promise.all(
+  Array.from({ length: 5 }, () => client.rpc("consume_persona_ai_rate_limit", { p_scope: "analyze" })),
+);
+const personaErrors = personaResults.flatMap(({ error }) => (error ? [error.message] : []));
+if (personaErrors.length > 0) throw new Error(`Persona rate-limit RPC failed: ${personaErrors.join("; ")}`);
+
+const personaAllowed = personaResults.filter(({ data }) => data === true).length;
+const personaRejected = personaResults.filter(({ data }) => data === false).length;
+if (personaAllowed !== 4 || personaRejected !== 1) {
+  throw new Error(`Expected 4 allowed and 1 rejected concurrent Persona calls; got ${personaAllowed} and ${personaRejected}.`);
+}
+
+console.log("Persona shared rate limiter: 4 allowed, 1 rejected under concurrent load.");
