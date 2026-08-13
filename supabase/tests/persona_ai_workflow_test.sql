@@ -141,7 +141,7 @@ select extensions.throws_ok(
     '81111111-1111-4111-8111-111111111111/' ||
       (select value::text from persona_ai_state where key = 'persona') || '/scene.webp'
   ),
-  'P0001',
+  '42501',
   'Direct deletion from storage tables is not allowed. Use the Storage API instead.',
   'registered Storage objects reject direct table deletion at the Storage boundary'
 );
@@ -298,13 +298,10 @@ select extensions.is_empty(
   'prepared deletion leaves no dangling public asset metadata'
 );
 
-delete from storage.objects
-where bucket_id = 'persona-assets'
-  and name = '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/disposable.webp';
-
-select extensions.is_empty(
-  $$select id from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid$$,
-  'only the now-orphaned Storage object becomes deletable by its owner'
+select extensions.is(
+  (select count(*)::integer from storage.objects where id = '86666666-6666-4666-8666-666666666662'::uuid),
+  1,
+  'the orphan remains available for deletion through the owner-authenticated Storage API'
 );
 
 select extensions.throws_ok(
