@@ -416,7 +416,7 @@ select extensions.is(
       and policyname in (
         'Persona owners can upload their assets',
         'Eligible users can read persona assets',
-        'Persona owners can delete unreferenced assets'
+        'Persona owners can delete orphan assets'
       )
   ),
   3,

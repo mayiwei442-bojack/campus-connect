@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(28);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -134,9 +134,17 @@ select extensions.is(
   'a rejected proposal remains excluded from confirmed knowledge'
 );
 
-delete from storage.objects
-where bucket_id = 'persona-assets'
-  and name = '81111111-1111-4111-8111-111111111111/' || (select value::text from persona_ai_state where key = 'persona') || '/scene.webp';
+select extensions.throws_ok(
+  format(
+    'delete from storage.objects where bucket_id = %L and name = %L',
+    'persona-assets',
+    '81111111-1111-4111-8111-111111111111/' ||
+      (select value::text from persona_ai_state where key = 'persona') || '/scene.webp'
+  ),
+  'P0001',
+  'Direct deletion from storage tables is not allowed. Use the Storage API instead.',
+  'registered Storage objects reject direct table deletion at the Storage boundary'
+);
 
 select extensions.is(
   (
