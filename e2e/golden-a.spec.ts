@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 import { E2E_USERS } from "./support/users";
 
-const PLACE_ID = "library";
+const PLACE_ID = "tennis_5";
+const PLACE_LABEL = "Tennis 5";
 const PNG_1X1 = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nCEAAAAASUVORK5CYII=",
   "base64",
@@ -275,8 +276,8 @@ test.describe.serial("Golden path A", () => {
     await ownerPage.goto("/map");
     await expect(ownerPage.getByText("73 组节点已配对")).toBeVisible({ timeout: 30_000 });
     await ownerPage.locator('input[placeholder*="library"]').fill(PLACE_ID);
-    await ownerPage.getByRole("button", { name: /Library.*PLACE_library/i }).click();
-    await expect(ownerPage.getByText("ANCHOR_library")).toBeVisible();
+    await ownerPage.getByRole("button", { name: new RegExp(`${PLACE_LABEL}.*PLACE_${PLACE_ID}`, "i") }).click();
+    await expect(ownerPage.getByText(`ANCHOR_${PLACE_ID}`)).toBeVisible();
     await expect(ownerPage.getByText("5 个活动 Beacon")).toBeVisible();
     await expect(ownerPage.getByText("另有 +1 个活动")).toBeVisible();
     await expect(ownerPage.getByRole("link", { name: "E2E 地图聚合 4" })).toBeVisible();
