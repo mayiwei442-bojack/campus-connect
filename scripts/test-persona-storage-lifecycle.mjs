@@ -37,6 +37,10 @@ try {
   const { error: signInError } = await client.auth.signInWithPassword({ email, password });
   if (signInError) throw signInError;
 
+  // Avoid a transient "JWT issued at future" response when local CI containers
+  // cross a whole-second clock boundary immediately after sign-in.
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+
   const { data: personaId, error: personaError } = await client.rpc("create_persona", {
     p_name: "Storage lifecycle",
     p_topic: "Private image provenance",

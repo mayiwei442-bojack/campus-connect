@@ -32,6 +32,10 @@ const client = createClient(apiUrl, publishableKey, {
 const { error: signInError } = await client.auth.signInWithPassword({ email, password });
 if (signInError) throw signInError;
 
+// The local Auth and API containers can cross a whole-second clock boundary on CI.
+// Let a freshly issued JWT become valid before exercising concurrent RPCs.
+await new Promise((resolve) => setTimeout(resolve, 1_100));
+
 const millisecondInMinute = Date.now() % 60_000;
 if (millisecondInMinute > 50_000) {
   await new Promise((resolve) => setTimeout(resolve, 60_100 - millisecondInMinute));
