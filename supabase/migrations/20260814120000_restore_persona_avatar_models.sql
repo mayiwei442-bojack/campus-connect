@@ -1,3 +1,7 @@
+-- Restore the persona avatar-model feature that 20260813175000 retired.
+-- Re-creates the table, RPCs, private bucket, and storage policies in their
+-- final hardened form (read access requires a registered avatar-model row).
+
 create table public.persona_avatar_models (
   id uuid primary key default gen_random_uuid(),
   persona_id uuid not null unique references public.personas (id) on delete cascade,
@@ -44,31 +48,6 @@ using (
     and not app_private.is_blocked_with_viewer(owner_id)
   )
 );
-
-create or replace function public.can_read_persona_avatar_model(p_storage_path text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1
-    from public.persona_avatar_models avatar_model
-    join public.personas persona on persona.id = avatar_model.persona_id
-    join public.profiles profile on profile.id = persona.owner_id
-    where avatar_model.storage_path = p_storage_path
-      and (
-        avatar_model.owner_id = auth.uid()
-        or (
-          persona.visibility = 'public'
-          and persona.is_enabled = true
-          and profile.is_public = true
-          and not app_private.is_blocked_with_viewer(avatar_model.owner_id)
-        )
-      )
-  );
-$$;
 
 create or replace function public.register_persona_avatar_model(
   p_persona_id uuid,
@@ -247,11 +226,9 @@ begin
 end;
 $$;
 
-revoke all on function public.can_read_persona_avatar_model(text) from public, anon, authenticated;
 revoke all on function public.register_persona_avatar_model(uuid, text, text, bigint) from public, anon, authenticated;
 revoke all on function public.prepare_persona_avatar_model_deletion(uuid, uuid) from public, anon, authenticated;
 
-grant execute on function public.can_read_persona_avatar_model(text) to authenticated;
 grant execute on function public.register_persona_avatar_model(uuid, text, text, bigint) to authenticated;
 grant execute on function public.prepare_persona_avatar_model_deletion(uuid, uuid) to authenticated;
 
@@ -288,7 +265,11 @@ using (
   bucket_id = 'persona-models'
   and (
     (storage.foldername(name))[1] = (select auth.uid())::text
-    or public.can_read_persona_avatar_model(name)
+    or exists (
+      select 1
+      from public.persona_avatar_models
+      where persona_avatar_models.storage_path = name
+    )
   )
 );
 
