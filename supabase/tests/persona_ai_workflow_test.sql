@@ -13,6 +13,12 @@ grant select, insert, update, delete on table persona_ai_state to authenticated;
 create temporary table persona_ai_context (key text primary key, value jsonb not null);
 grant select, insert, update, delete on table persona_ai_context to authenticated;
 
+select extensions.is(
+  (select file_size_limit from storage.buckets where id = 'persona-assets'),
+  52428800::bigint,
+  'the Persona bucket accepts images through 50 MiB'
+);
+
 set local role authenticated;
 set local request.jwt.claim.sub = '81111111-1111-4111-8111-111111111111';
 
@@ -20,12 +26,6 @@ insert into persona_ai_state (key, value)
 values (
   'persona',
   public.create_persona('摄影现场', '校园摄影与构图', '只采纳主人确认过的条目', 'private')
-);
-
-select extensions.is(
-  (select file_size_limit from storage.buckets where id = 'persona-assets'),
-  52428800::bigint,
-  'the Persona bucket accepts images through 50 MiB'
 );
 
 insert into storage.objects (id, bucket_id, name, owner, owner_id, metadata)
