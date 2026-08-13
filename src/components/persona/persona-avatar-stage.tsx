@@ -11,14 +11,15 @@ export type PersonaAvatarSlot = 1 | 2 | 3;
 
 export type PersonaAvatarModelConfig = Readonly<{
   accent: string;
+  displayScale: number;
   label: string;
   modelUrl: string;
   slot: PersonaAvatarSlot;
+  verticalOffset: number;
 }>;
 
 type PersonaAvatarStageProps = {
-  activeSlot: PersonaAvatarSlot;
-  models: PersonaAvatarModelConfig[];
+  model: PersonaAvatarModelConfig;
 };
 
 type StageErrorBoundaryProps = {
@@ -107,12 +108,10 @@ function StageControls({ motionActive }: { motionActive: boolean }) {
 function AvatarModel({
   compact,
   config,
-  isActive,
   motionActive,
 }: {
   compact: boolean;
   config: PersonaAvatarModelConfig;
-  isActive: boolean;
   motionActive: boolean;
 }) {
   const gltf = useLoader(GLTFLoader, config.modelUrl);
@@ -122,7 +121,7 @@ function AvatarModel({
     const bounds = new Box3().setFromObject(nextScene);
     const size = bounds.getSize(new Vector3());
     const center = bounds.getCenter(new Vector3());
-    const scale = 2.18 / Math.max(size.y, 0.001);
+    const scale = 2.65 / Math.max(size.y, 0.001);
 
     nextScene.scale.setScalar(scale);
     nextScene.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
@@ -157,9 +156,8 @@ function AvatarModel({
       return;
     }
 
-    const compactScale = compact ? 0.73 : 1;
-    const targetScale = compactScale * (isActive ? 1.055 : 0.94);
-    const targetDepth = isActive ? 0.32 : 0;
+    const targetScale = (compact ? 0.84 : 1) * config.displayScale;
+    const targetDepth = 0.32;
     if (!motionActive) {
       group.scale.setScalar(targetScale);
       group.position.z = targetDepth;
@@ -171,17 +169,15 @@ function AvatarModel({
     group.rotation.y = Math.sin(state.clock.elapsedTime * 0.45 + config.slot) * 0.045;
   });
 
-  const spread = compact ? 1.12 : 1.62;
   return (
-    <group ref={groupRef} position={[(config.slot - 2) * spread, 0, 0]}>
+    <group ref={groupRef} position={[0, config.verticalOffset, 0]}>
       <primitive object={scene} />
     </group>
   );
 }
 
-function LoadingFigure({ compact, slot, accent }: { compact: boolean; slot: PersonaAvatarSlot; accent: string }) {
+function LoadingFigure({ accent, verticalOffset }: { accent: string; verticalOffset: number }) {
   const groupRef = useRef<Group>(null);
-  const spread = compact ? 1.12 : 1.62;
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -190,7 +186,7 @@ function LoadingFigure({ compact, slot, accent }: { compact: boolean; slot: Pers
   });
 
   return (
-    <group ref={groupRef} position={[(slot - 2) * spread, compact ? 0.62 : 0.84, 0]} scale={compact ? 0.72 : 1}>
+    <group ref={groupRef} position={[0, 1.05 + verticalOffset, 0]}>
       <mesh>
         <octahedronGeometry args={[0.22, 0]} />
         <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.32} wireframe />
@@ -199,28 +195,11 @@ function LoadingFigure({ compact, slot, accent }: { compact: boolean; slot: Pers
   );
 }
 
-function StageFloor({ models, activeSlot, compact }: { models: PersonaAvatarModelConfig[]; activeSlot: PersonaAvatarSlot; compact: boolean }) {
-  const spread = compact ? 1.12 : 1.62;
-  return (
-    <>
-      {models.map((model) => (
-        <group key={model.slot} position={[(model.slot - 2) * spread, -0.025, 0]}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[model.slot === activeSlot ? 0.42 : 0.3, model.slot === activeSlot ? 0.47 : 0.33, 48]} />
-            <meshBasicMaterial color={model.accent} transparent opacity={model.slot === activeSlot ? 0.92 : 0.28} />
-          </mesh>
-          <pointLight color={model.accent} intensity={model.slot === activeSlot ? 2.4 : 0.7} distance={3.4} position={[0, 0.65, 0.55]} />
-        </group>
-      ))}
-      <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[14, 8]} />
-        <meshStandardMaterial color="#071923" roughness={0.84} metalness={0.08} />
-      </mesh>
-    </>
-  );
+function StageLight({ model }: { model: PersonaAvatarModelConfig }) {
+  return <pointLight color={model.accent} intensity={2.5} distance={3.8} position={[0, 1.15, 0.55]} />;
 }
 
-function AvatarScene({ activeSlot, models, motionActive }: PersonaAvatarStageProps & { motionActive: boolean }) {
+function AvatarScene({ model, motionActive }: PersonaAvatarStageProps & { motionActive: boolean }) {
   const width = useThree((state) => state.size.width);
   const compact = width < 600;
 
@@ -232,17 +211,15 @@ function AvatarScene({ activeSlot, models, motionActive }: PersonaAvatarStagePro
       <directionalLight color="#fff4df" intensity={2.4} position={[-3.5, 5, 4]} />
       <directionalLight color="#5dbaf1" intensity={1.5} position={[4, 2.5, 2]} />
       <StageControls motionActive={motionActive} />
-      <StageFloor activeSlot={activeSlot} compact={compact} models={models} />
-      {models.map((model) => (
-        <Suspense key={model.slot} fallback={<LoadingFigure accent={model.accent} compact={compact} slot={model.slot} />}>
-          <AvatarModel compact={compact} config={model} isActive={model.slot === activeSlot} motionActive={motionActive} />
-        </Suspense>
-      ))}
+      <StageLight model={model} />
+      <Suspense key={model.slot} fallback={<LoadingFigure accent={model.accent} verticalOffset={model.verticalOffset} />}>
+        <AvatarModel compact={compact} config={model} motionActive={motionActive} />
+      </Suspense>
     </>
   );
 }
 
-export function PersonaAvatarStage({ activeSlot, models }: PersonaAvatarStageProps) {
+export function PersonaAvatarStage({ model }: PersonaAvatarStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sceneKey, setSceneKey] = useState(0);
   const motionActive = useStageActivity(containerRef);
@@ -264,19 +241,15 @@ export function PersonaAvatarStage({ activeSlot, models }: PersonaAvatarStagePro
         )}
       >
         <Canvas
-          aria-label="三个可交互的 Persona 三维人物形象"
-          camera={{ fov: 38, near: 0.1, far: 30, position: [0, 1.42, 6.7] }}
+          aria-label={`当前选中的${model.label}`}
+          camera={{ fov: 38, near: 0.1, far: 30, position: [0, 1.42, 6.25] }}
           dpr={[1, 1.5]}
           frameloop={motionActive ? "always" : "demand"}
           gl={{ antialias: true, powerPreference: "high-performance" }}
         >
-          <AvatarScene activeSlot={activeSlot} models={models} motionActive={motionActive} />
+          <AvatarScene model={model} motionActive={motionActive} />
         </Canvas>
       </StageErrorBoundary>
     </div>
   );
 }
-
-useLoader.preload(GLTFLoader, "/models/persona/einstein.glb");
-useLoader.preload(GLTFLoader, "/models/persona/ironman.glb");
-useLoader.preload(GLTFLoader, "/models/persona/spider.glb");

@@ -9,21 +9,27 @@ import type { PersonaAvatarModelConfig, PersonaAvatarSlot } from "@/components/p
 const AVATAR_MODELS: PersonaAvatarModelConfig[] = [
   {
     accent: "#f4d7a2",
+    displayScale: 1,
     label: "爱因斯坦形象",
     modelUrl: "/models/persona/einstein.glb",
     slot: 1,
+    verticalOffset: 0,
   },
   {
     accent: "#ef694c",
+    displayScale: 1.18,
     label: "钢铁侠形象",
     modelUrl: "/models/persona/ironman.glb",
     slot: 2,
+    verticalOffset: 0.8,
   },
   {
     accent: "#63b7e6",
+    displayScale: 1.38,
     label: "蜘蛛侠形象",
     modelUrl: "/models/persona/spider.glb",
     slot: 3,
+    verticalOffset: 1.27,
   },
 ];
 
@@ -63,10 +69,10 @@ export function PersonaAvatarShowcase({ personas }: PersonaAvatarShowcaseProps) 
             className="pointer-events-none absolute inset-0 opacity-50"
             style={{ background: `radial-gradient(circle at 50% 72%, ${activeModel.accent}35, transparent 42%)` }}
           />
-          <PersonaAvatarStage activeSlot={activeSlot} models={AVATAR_MODELS} />
+          <PersonaAvatarStage model={activeModel} />
           <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2 sm:left-5 sm:top-5">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/25 px-3 py-1.5 font-mono text-[0.58rem] uppercase tracking-[0.16em] text-white/66 backdrop-blur-md">
-              <Box size={12} aria-hidden="true" /> Live 3D ensemble
+              <Box size={12} aria-hidden="true" /> Live 3D Persona
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[0.62rem] font-semibold text-white/66 backdrop-blur-md">
               <MousePointer2 size={12} aria-hidden="true" /> 拖动查看
