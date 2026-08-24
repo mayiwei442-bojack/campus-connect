@@ -1,7 +1,17 @@
 "use client";
 
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { AnimationMixer, Box3, Group, MathUtils, Mesh, Vector3 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -109,10 +119,12 @@ function AvatarModel({
   compact,
   config,
   motionActive,
+  onLoaded,
 }: {
   compact: boolean;
   config: PersonaAvatarModelConfig;
   motionActive: boolean;
+  onLoaded: () => void;
 }) {
   const gltf = useLoader(GLTFLoader, config.modelUrl);
   const groupRef = useRef<Group>(null);
@@ -133,6 +145,10 @@ function AvatarModel({
     return nextScene;
   }, [gltf.scene]);
   const mixer = useMemo(() => new AnimationMixer(scene), [scene]);
+
+  useEffect(() => {
+    onLoaded();
+  }, [onLoaded, scene]);
 
   useEffect(() => {
     const clip = gltf.animations[0];
@@ -199,7 +215,11 @@ function StageLight({ model }: { model: PersonaAvatarModelConfig }) {
   return <pointLight color={model.accent} intensity={2.5} distance={3.8} position={[0, 1.15, 0.55]} />;
 }
 
-function AvatarScene({ model, motionActive }: PersonaAvatarStageProps & { motionActive: boolean }) {
+function AvatarScene({
+  model,
+  motionActive,
+  onModelLoaded,
+}: PersonaAvatarStageProps & { motionActive: boolean; onModelLoaded: () => void }) {
   const width = useThree((state) => state.size.width);
   const compact = width < 600;
 
@@ -213,7 +233,7 @@ function AvatarScene({ model, motionActive }: PersonaAvatarStageProps & { motion
       <StageControls motionActive={motionActive} />
       <StageLight model={model} />
       <Suspense key={model.slot} fallback={<LoadingFigure accent={model.accent} verticalOffset={model.verticalOffset} />}>
-        <AvatarModel compact={compact} config={model} motionActive={motionActive} />
+        <AvatarModel compact={compact} config={model} motionActive={motionActive} onLoaded={onModelLoaded} />
       </Suspense>
     </>
   );
@@ -221,11 +241,19 @@ function AvatarScene({ model, motionActive }: PersonaAvatarStageProps & { motion
 
 export function PersonaAvatarStage({ model }: PersonaAvatarStageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [loadedModelUrl, setLoadedModelUrl] = useState<string | null>(null);
   const [sceneKey, setSceneKey] = useState(0);
   const motionActive = useStageActivity(containerRef);
+  const markModelLoaded = useCallback(() => setLoadedModelUrl(model.modelUrl), [model.modelUrl]);
 
   return (
-    <div ref={containerRef} className="relative h-full touch-none">
+    <div
+      ref={containerRef}
+      role="group"
+      aria-busy={loadedModelUrl !== model.modelUrl}
+      aria-label={`${model.label} 3D 预览`}
+      className="relative h-full touch-none"
+    >
       <StageErrorBoundary
         key={sceneKey}
         fallback={(
@@ -247,7 +275,7 @@ export function PersonaAvatarStage({ model }: PersonaAvatarStageProps) {
           frameloop={motionActive ? "always" : "demand"}
           gl={{ antialias: true, powerPreference: "high-performance" }}
         >
-          <AvatarScene model={model} motionActive={motionActive} />
+          <AvatarScene model={model} motionActive={motionActive} onModelLoaded={markModelLoaded} />
         </Canvas>
       </StageErrorBoundary>
     </div>
