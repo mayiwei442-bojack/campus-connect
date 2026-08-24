@@ -1,0 +1,2 @@
+# Built-in 3D roadshow assets are local-only and must never enter a Vercel deployment.
+local-assets/persona/

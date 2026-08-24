@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isPersonaShowcaseEmail, shouldShowLocalPersonaRoadshow } from "./showcase";
+import {
+  getLocalRoadshowModelFilename,
+  isPersonaShowcaseEmail,
+  shouldShowLocalPersonaRoadshow,
+} from "./showcase";
 
 describe("isPersonaShowcaseEmail", () => {
   it("allows the roadshow account regardless of email casing or whitespace", () => {
@@ -21,5 +25,16 @@ describe("shouldShowLocalPersonaRoadshow", () => {
 
   it("never exposes the built-in roadshow models on Vercel", () => {
     expect(shouldShowLocalPersonaRoadshow("3022387588@qq.com", "1")).toBe(false);
+  });
+});
+
+describe("getLocalRoadshowModelFilename", () => {
+  it("resolves only allowlisted local roadshow models", () => {
+    expect(getLocalRoadshowModelFilename("einstein", undefined)).toBe("einstein.glb");
+    expect(getLocalRoadshowModelFilename("../einstein", undefined)).toBeNull();
+  });
+
+  it("never resolves roadshow files on Vercel", () => {
+    expect(getLocalRoadshowModelFilename("einstein", "1")).toBeNull();
   });
 });
