@@ -264,7 +264,6 @@ function CampusScene({
       <ambientLight intensity={1.65} />
       <hemisphereLight args={["#dceff1", "#6f5943", 2.1]} />
       <directionalLight position={[6, 10, 5]} intensity={2.2} />
-      <gridHelper args={[18, 36, "#52766c", "#31594e"]} position={[0, -0.015, 0]} />
       <Suspense fallback={<SceneLoadingObject />}>
         <CampusModel selectedId={selectedId} onSelect={onSelect} onReady={onReady} />
       </Suspense>
