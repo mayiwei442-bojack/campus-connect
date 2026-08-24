@@ -5,6 +5,11 @@ export type PersonaAssetItem = Pick<
   "id" | "storage_path" | "mime_type" | "byte_size" | "user_description" | "is_visible" | "analysis_status" | "analysis_error" | "model_name"
 > & { imageUrl: string | null };
 
+export type PersonaAvatarModelItem = Pick<
+  Database["public"]["Tables"]["persona_avatar_models"]["Row"],
+  "id" | "storage_path" | "original_filename" | "mime_type" | "byte_size" | "updated_at"
+> & { modelUrl: string | null };
+
 export type PersonaEntryItem = Pick<
   Database["public"]["Tables"]["persona_entries"]["Row"],
   "id" | "source_asset_id" | "kind" | "knowledge_key" | "content" | "status" | "confirmed_at"
@@ -20,6 +25,7 @@ export type PersonaItem = Pick<
   "id" | "slot" | "name" | "topic" | "summary" | "visibility" | "is_enabled" | "allow_matching"
 > & {
   assets: PersonaAssetItem[];
+  avatarModel: PersonaAvatarModelItem | null;
   entries: PersonaEntryItem[];
   questionTopics: PersonaTopicItem[];
 };

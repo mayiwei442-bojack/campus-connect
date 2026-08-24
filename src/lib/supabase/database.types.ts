@@ -474,6 +474,57 @@ export type Database = {
           },
         ]
       }
+      persona_avatar_models: {
+        Row: {
+          byte_size: number
+          created_at: string
+          id: string
+          mime_type: string
+          original_filename: string
+          owner_id: string
+          persona_id: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          byte_size: number
+          created_at?: string
+          id?: string
+          mime_type?: string
+          original_filename: string
+          owner_id: string
+          persona_id: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          byte_size?: number
+          created_at?: string
+          id?: string
+          mime_type?: string
+          original_filename?: string
+          owner_id?: string
+          persona_id?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "persona_avatar_models_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "persona_avatar_models_persona_id_fkey"
+            columns: ["persona_id"]
+            isOneToOne: true
+            referencedRelation: "personas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       persona_entries: {
         Row: {
           confirmed_at: string | null
@@ -920,6 +971,10 @@ export type Database = {
         Args: { p_asset_id: string; p_persona_id: string }
         Returns: string
       }
+      prepare_persona_avatar_model_deletion: {
+        Args: { p_model_id: string; p_persona_id: string }
+        Returns: string
+      }
       promote_activity_waitlist: {
         Args: { p_activity_id: string }
         Returns: string
@@ -940,6 +995,15 @@ export type Database = {
           p_user_description?: string
         }
         Returns: string
+      }
+      register_persona_avatar_model: {
+        Args: {
+          p_byte_size: number
+          p_original_filename: string
+          p_persona_id: string
+          p_storage_path: string
+        }
+        Returns: Json
       }
       reject_persona_entry: { Args: { p_entry_id: string }; Returns: undefined }
       remove_activity_member: {
