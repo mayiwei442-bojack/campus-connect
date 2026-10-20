@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { FriendCenterDialog, type FriendRequestItem } from "@/components/messages/friend-center-dialog";
+import { mergeMessageHistory } from "@/lib/messages/history";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -80,7 +81,9 @@ export function MessagesWorkspace({
             setMessages((current) => activeIdRef.current !== message.conversation_id
               || current.some((item) => item.id === message.id)
               ? current
-              : [...current, message]);
+              : mergeMessageHistory(message.conversation_id, [], [...current, message]));
+          }).catch(() => {
+            if (activeIdRef.current === activeId) setError("新消息同步失败，请刷新后重试。");
           });
         },
       )
@@ -109,26 +112,39 @@ export function MessagesWorkspace({
     if (id === activeId) return;
     setActiveId(id);
     activeIdRef.current = id;
+    setBody("");
     setMessages([]);
     setError("");
     setConnection("connecting");
     const requestToken = ++requestTokenRef.current;
     router.replace(`/messages?conversation=${id}`, { scroll: false });
-    const { data, error: loadError } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", id)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(200);
+    try {
+      const { data, error: loadError } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", id)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(200);
 
-    if (loadError) {
+      if (loadError) throw loadError;
+
+      const hydrated = await Promise.all([...(data ?? [])].reverse().map(hydrateMessage));
+      if (requestTokenRef.current === requestToken) {
+        setMessages((current) => mergeMessageHistory(id, hydrated, current));
+      }
+    } catch {
       if (requestTokenRef.current === requestToken) setError("暂时无法加载这段会话。");
-      return;
     }
+  }
 
-    const hydrated = await Promise.all([...(data ?? [])].reverse().map(hydrateMessage));
-    if (requestTokenRef.current === requestToken) setMessages(hydrated);
+  async function displaySentMessage(messageId: string) {
+    const { data, error: loadError } = await supabase.from("messages").select("*").eq("id", messageId).single();
+    if (loadError || !data) throw new Error("消息已发送，但页面同步失败，请刷新后查看。");
+    const message = await hydrateMessage(data);
+    setMessages((current) => activeIdRef.current === message.conversation_id
+      ? mergeMessageHistory(message.conversation_id, [message], current)
+      : current);
   }
 
   async function sendText(event: FormEvent<HTMLFormElement>) {
@@ -137,33 +153,26 @@ export function MessagesWorkspace({
     if (!activeId || !normalized || busy || activeConversation?.is_archived) return;
     setBusy(true);
     setError("");
-    const { data: messageId, error: sendError } = await supabase.rpc("send_message", {
-      p_conversation_id: activeId,
-      p_kind: "text",
-      p_body: normalized,
-      p_client_nonce: crypto.randomUUID(),
-    });
-    if (sendError || !messageId) {
-      setError("消息发送失败，请确认你仍可访问当前会话。");
-    } else {
-      setBody("");
-      const { data: sentMessage, error: sentMessageError } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("id", messageId)
-        .single();
-      if (sentMessageError) {
-        setError("消息已发送，但页面同步失败，请刷新后查看。");
-      } else {
-        const hydrated = await hydrateMessage(sentMessage);
-        setMessages((current) => (
-          activeIdRef.current !== hydrated.conversation_id || current.some((item) => item.id === hydrated.id)
-            ? current
-            : [...current, hydrated]
-        ));
+    const requestToken = requestTokenRef.current;
+    let sent = false;
+    try {
+      const { data: messageId, error: sendError } = await supabase.rpc("send_message", {
+        p_conversation_id: activeId,
+        p_kind: "text",
+        p_body: normalized,
+        p_client_nonce: crypto.randomUUID(),
+      });
+      if (sendError || !messageId) throw sendError ?? new Error("missing_message");
+      sent = true;
+      if (requestTokenRef.current === requestToken) setBody("");
+      await displaySentMessage(messageId);
+    } catch {
+      if (requestTokenRef.current === requestToken) {
+        setError(sent ? "消息已发送，但页面同步失败，请刷新后查看。" : "消息发送失败，请确认网络及会话权限后重试。");
       }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
@@ -177,30 +186,37 @@ export function MessagesWorkspace({
 
     setBusy(true);
     setError("");
+    const requestToken = requestTokenRef.current;
     const extension = file.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "image";
     const path = `${activeId}/${viewerId}/${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await supabase.storage
-      .from("chat-images")
-      .upload(path, file, { contentType: file.type, upsert: false });
+    let sent = false;
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("chat-images")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
 
-    if (uploadError) {
-      setError("图片上传失败。");
+      const { data: messageId, error: sendError } = await supabase.rpc("send_message", {
+        p_conversation_id: activeId,
+        p_kind: "image",
+        p_storage_path: path,
+        p_mime_type: file.type,
+        p_client_nonce: crypto.randomUUID(),
+      });
+      if (sendError) {
+        await supabase.storage.from("chat-images").remove([path]);
+        throw sendError;
+      }
+      sent = true;
+      if (!messageId) throw new Error("missing_message");
+      await displaySentMessage(messageId);
+    } catch {
+      if (requestTokenRef.current === requestToken) {
+        setError(sent ? "图片已发送，但页面同步失败，请刷新后查看。" : "图片消息发送失败，请确认网络及会话权限后重试。");
+      }
+    } finally {
       setBusy(false);
-      return;
     }
-
-    const { error: sendError } = await supabase.rpc("send_message", {
-      p_conversation_id: activeId,
-      p_kind: "image",
-      p_storage_path: path,
-      p_mime_type: file.type,
-      p_client_nonce: crypto.randomUUID(),
-    });
-    if (sendError) {
-      await supabase.storage.from("chat-images").remove([path]);
-      setError("图片消息发送失败。");
-    }
-    setBusy(false);
   }
 
   return (
